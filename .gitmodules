@@ -1,0 +1,3 @@
+[submodule "rwt"]
+	path = rwt
+	url = https://github.com/ricedsp/rwt.git
