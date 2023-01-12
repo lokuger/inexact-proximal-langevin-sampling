@@ -10,43 +10,73 @@ import numpy as np
 import sys
 from numpy.random import default_rng
 
-import distributions as pd
-
-class SAPG():
-    def __init__(self, iter_wu, iter_outer, iter_inner, tau, delta, x0, theta0, thetamin, thetamax, epsilon_prox, pd):
-        """Important: Some of the classes in potentials.py  like l1loss or TV
-        allow a scaling by a parameter theta (regularization parameter).
-        Here in SAPG we assume that this is set to 1, i.e. pd.G computes the 
-        non-differentiable part of the potential without a scaling.
-        """
+class sapg():
+    """
+    Implements the SAPG algorithm introduced by [1]. For the numerical
+    tests of inexact PLA, we need distributions with densities of the form 
+        d mu(x) / d Leb(x) ~ exp( - f(x) - mu * g(x) )
+    where 
+        - f is smooth, gradient-Lipschitz and convex
+        - g is convex and potentially non-smooth
+    SAPG is an empirical Bayesian strategy to choose the parameter mu by 
+    computing the marginal MLE of the parameter.
+    
+    Important: Some of the classes in potentials.py  like l1loss or TV
+    allow a scaling by a parameter 'scale' (which is implicitly the 
+    regularization parameter mu), because we need this for the later 
+    sampling algorithms.
+    This class assumes that this is set to 1, i.e. pd.g computes the 
+    non-differentiable part of the potential without a scaling.
+    
+    Parameters:
+        - iter_wu:      Muber of warm-up sampling steps
+        - iter_outer:   Number of steps calibrating mu
+        - iter_inner:   Number of sampling steps in each outer loop
+        - iter_burnin:  Number of burn-in steps used for the estimates of theta
+        - tau:          Step size of the sampling algorithm, here (inexact) PLA
+        - delta:        lambda expression, Step size for mu, will be called as delta(n)
+        - x0:           Initialization for warm-up. Choose as noisy image or MAP
+        - theta0:       Initialization of regularization parameter
+        - theta_min     lower bound for parameter
+        - theta_max     upper bound for parameter
+        - epsilon_prox  accuracy for evaluation of proximal mapping in inexact PLA
+        - pd            posterior distribution, class instance from distributions.pyi
+        
+    [1]: "Maximum likelihood estimation of regularisation parameters in
+    high-dimensional inverse problems: an empirical Bayesian approach Part I: 
+        Methodology and Experiments", 2020. Vidal, De Bortoli, Pereyra, Durmus
+    """
+    
+    def __init__(self, iter_wu, iter_outer, iter_inner, iter_burnin, tau, delta, x0, theta0, theta_min, theta_max, epsilon_prox, pd):
         self.iter_wu = iter_wu
         self.iter_outer = iter_outer
         self.iter_inner = iter_inner
+        self.iter_burnin = iter_burnin
         self.i_wu = 0
         self.i_out = 0
         self.tau = tau
         self.delta = delta  # lambda expression mapping n to delta_n
-        self.theta, self.mean_theta = np.zeros((iter_outer+1,)), np.zeros((iter_outer+1,))
-        self.theta[0], self.mean_theta[0], self.thetamin, self.thetamax = theta0, theta0, thetamin, thetamax
+        self.theta, self.mean_theta = np.zeros((iter_outer+1,)), np.zeros((iter_outer-self.iter_burnin,))
+        self.theta[0], self.mean_theta[0], self.theta_min, self.theta_max = theta0, theta0, theta_min, theta_max
         self.eta = np.zeros((iter_outer+1,))
-        self.eta[0], self.etamin, self.etamax = np.log(theta0), np.log(thetamin), np.log(thetamax)
+        self.eta[0], self.eta_min, self.eta_max = np.log(theta0), np.log(theta_min), np.log(theta_max)
         self.eps_prox = epsilon_prox
         self.d = x0.shape[0]
         self.x0 = np.copy(x0)
         self.x = np.copy(x0)
         self.pd = pd
-        self.F = self.pd.F
-        self.dF = self.F.grad
-        self.dFx = self.dF(self.x)
-        self.G = self.pd.G
-        self.meansG = np.zeros((iter_outer+1,))
-        self.meansG[0] = self.G(x0)
+        self.f = self.pd.f
+        self.df = self.f.grad
+        self.dfx = self.df(self.x)
+        self.g = self.pd.g
+        self.mean_g = np.zeros((iter_outer+1,))
+        self.mean_g[0] = self.g(x0)
         try:
-            self.proxExact = True
-            self.proxG = self.G.prox
+            self.prox_is_exact = True
+            self.prox_g = self.g.prox
         except AttributeError:
-            self.proxExact = False
-            self.proxG = self.G.inexact_prox
+            self.prox_is_exact = False
+            self.prox_g = self.g.inexact_prox
         self.rng = default_rng()
     
     def simulate(self, return_all=False, verbose=1):
@@ -63,47 +93,43 @@ class SAPG():
                 sys.stdout.write('\b'*4+'{:3d}%'.format(int(self.i_out/self.iter_outer*100)))
     
     def warmup(self, verbose):
-        """ warm up Markov chain using (inexact) PLA """
         self.logpi_wu = np.zeros((self.iter_wu,))
         while self.i_wu < self.iter_wu:
             self.i_wu += 1
             xi = self.rng.normal(loc=0, scale=1, size=(self.d,1))
-            y = self.x - self.tau * self.dFx + np.sqrt(2*self.tau) * xi
-            if self.proxExact:
-                self.x = self.proxG(y, gamma=self.tau*self.theta[0])
+            y = self.x - self.tau * self.dfx + np.sqrt(2*self.tau) * xi
+            if self.prox_is_exact:
+                self.x = self.prox_g(y, gamma=self.tau*self.theta[0])
             else:
-                self.x = self.proxG(y, gamma=self.tau*self.theta[0], epsilon = self.eps_prox)
-            self.dFx = self.dF(self.x)
+                self.x = self.prox_g(y, gamma=self.tau*self.theta[0], epsilon=self.eps_prox)
+            self.dfx = self.df(self.x)
             # monitor likelihood during warm-up to estimate burn-in time
-            self.logpi_wu[self.i_wu-1] = - self.F(self.x) - self.theta[0]*self.G(self.x)
+            self.logpi_wu[self.i_wu-1] = - self.f(self.x) - self.theta[0]*self.g(self.x)
             if verbose:
                 sys.stdout.write('\b'*4+'{:3d}%'.format(int(self.i_wu/self.iter_wu*100)))
     
     def outer(self):
         self.i_in = 0
-        values_G = np.zeros((self.iter_inner,))
+        values_g = np.zeros((self.iter_inner,))
         while self.i_in < self.iter_inner:
             self.inner()
-            values_G[self.i_in-1] = self.G(self.x)
-        mean_valsG = np.mean(values_G)
-        self.eta[self.i_out] = self.eta[self.i_out-1] + self.delta(self.i_out)*(self.d/self.theta[self.i_out-1]- mean_valsG)*self.theta[self.i_out-1]
-        self.eta[self.i_out] = np.minimum(np.maximum(self.etamin,self.eta[self.i_out]),self.etamax)
+            values_g[self.i_in-1] = self.g(self.x)
+        self.mean_g[self.i_out] = np.mean(values_g)
+        self.eta[self.i_out] = self.eta[self.i_out-1] + self.delta(self.i_out)*(self.d/self.theta[self.i_out-1]- self.mean_g[self.i_out])*self.theta[self.i_out-1]
+        self.eta[self.i_out] = np.minimum(np.maximum(self.eta_min,self.eta[self.i_out]),self.eta_max)
         self.theta[self.i_out] = np.exp(self.eta[self.i_out])
-        self.mean_theta[self.i_out] = np.mean(self.theta[:self.i_out+1])
-        self.meansG[self.i_out] = mean_valsG
+        if self.i_out > self.iter_burnin:
+            self.mean_theta[self.i_out-1-self.iter_burnin] = np.mean(self.theta[self.iter_burnin:self.i_out+1])
         
         #print(self.theta[self.i_out])
             
     def inner(self):
-        """ this is essentially one step of inexact PLA, contrarily to the paper
-        version by Vidal where they used MYULA, this difference should not be a 
-        problem. """
         self.i_in += 1
         xi = self.rng.normal(loc=0, scale=1, size=(self.d,1))
-        y = self.x - self.tau * self.dFx + np.sqrt(2*self.tau) * xi
-        if self.proxExact:
-            self.x = self.proxG(y, gamma=self.tau*self.theta[self.i_out-1])
+        y = self.x - self.tau * self.dfx + np.sqrt(2*self.tau) * xi
+        if self.prox_is_exact:
+            self.x = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1])
         else:
-            self.x = self.proxG(y, gamma=self.tau*self.theta[self.i_out-1], epsilon=self.eps_prox)
-        self.dFx = self.dF(self.x)
+            self.x = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1], epsilon=self.eps_prox)
+        self.dfx = self.df(self.x)
         

@@ -119,16 +119,16 @@ def main_tv():
     """ determine optimal theta using SAPG """
     iter_outer = 50
     theta0 = 0.01
-    sapg = SAPG(iter_wu=200, 
-                iter_outer=iter_outer, 
-                iter_inner=1, 
-                tau=0.2/L, 
-                delta=lambda n: 0.1/(theta0*n1*n2) * (n+1)**(-0.8), 
-                x0=u_noisy, 
-                theta0=theta0, 
-                thetamin=0.001, 
-                thetamax=1, 
-                epsilon_prox=1e-1, 
+    sapg = SAPG(iter_wu=200,
+                iter_outer=iter_outer,
+                iter_inner=1,
+                tau=0.2/L,
+                delta=lambda n: 0.1/(theta0*n1*n2) * (n+1)**(-0.8),
+                x0=u_noisy,
+                theta0=theta0,
+                thetamin=0.001,
+                thetamax=1,
+                epsilon_prox=1e-1,
                 pd=posterior)
     sapg.simulate()
     

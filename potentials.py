@@ -1,87 +1,74 @@
 import numpy as np
 import warnings
     
-class L2loss_homoschedastic():
+class l2_loss_homoschedastic():
     """
-    a simplified form of the L2loss_heteroschedastic class that is faster for 
+    a simplified form of the l2_loss_heteroschedastic class that is faster for 
     the (very common) special case that the variance matrix is sigma^2*I
     
-    F(u) = 1/(2*sigma^2) * ||u - mu||_2^2
+    F(x) = 1/(2*sigma^2) * ||x - y||_2^2
     
-    d:      dimension of u, can be inferred from mu if mu is given\n
-    mu:     shift parameter/data, e.g. noisy image in denoising\n
-    sigma:  standard deviation sigma
+    __init__ input parameters:
+        - d:        dimension of x, can be inferred from mu if mu is given
+        - y:        shift parameter/data, e.g. noisy image in denoising
+        - sigma2:   noise variance of noise
+    
+    __call__ input parameter:
+        - x:        image of shape self.im_shape
     """
-    def __init__(self, d = None, mu = None, sigma = 1):
-        if d is None and mu is None:
-            raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
-        # infer dimension from parameters
-        self.d = d if d is not None else mu.shape[0]
-               
-        # set distribution parameters
-        self.mu = mu if mu is not None else np.zeros((self.d,1))
-        self.sigma = sigma
-        self.sigma2 = self.sigma**2
+    def __init__(self, im_shape, y=None, sigma2=1):
+        self.im_shape = self.im_shape
+        self.d = np.prod(im_shape)
+        self.y = y if y is not None else np.zeros(im_shape)
+        self.sigma2=1
     
     def __call__(self, x):
-        return 1/(2*self.sigma2) * np.sum((x-self.mu)**2, axis=0)
+        return 1/(2*self.sigma2) * np.sum((x-self.y)**2)
     
     def grad(self, x):
-        return 1/self.sigma2 * (x-self.mu)
+        return 1/self.sigma2 * (x-self.y)
     
     def prox(self, x, gamma = 1):
-        return 1/(self.sigma2+gamma)*(self.sigma2*x+gamma*self.mu)
+        return 1/(self.sigma2+gamma)*(self.sigma2*x+gamma*self.y)
     
-    def conj(self, y):
-        return self.sigma2/2 * np.sum(y**2, axis=0) + np.sum(y * self.mu, axis=0)
+    def conj(self, x):
+        return self.sigma2/2 * np.sum(x**2, axis=0) + np.sum(x * self.y, axis=0)
     
     def conjProx(self, x, gamma = 1):
-        return 1/(1+gamma*self.sigma2)*(x-gamma*self.mu)
+        return 1/(1+gamma*self.sigma2)*(x-gamma*self.y)
     
-class L2loss_reconstruction_homoschedastic():
+class l2_loss_reconstruction_homoschedastic():
     """
-    A variant of L2norm which allows a linear transformation of the input, i.e.
-    1/(2*sigma2) ||Kx-mu||_2^2
-    where K is a d x m real matrix, mu is in R^d, x in R^m
+    A variant of l2_loss_homoschedastic which allows a linear transformation 
+    of the input image
+    Necessary for all indirect models, like deblurring, tomography etc. K is
+    the forward operator of the associated inverse problem.
     
-    A variant of L2loss_homoschedastic which allows a linear transformation 
-    of the input
-    Necessary for all indirect models, hence everything except denoising. K is
-    the forward operator of the associated inverse problem
+    F(x) = 1/(2*sigma^2) * ||Ax - y||_2^2
     
-    F(u) = 1/(2*sigma^2) * ||K*u - mu||_2^2
-    
-    d:      dimension of u, can be inferred from mu or K if they are given\n
-    mu:     shift parameter/data, e.g. noisy image in denoising\n
-    sigma:  standard deviation sigma
-    K:      linear operator, given as an array of shape dxm
+    Inputs: 
+        - d:        dimension of u, can be inferred from mu or K if they are given
+        - y:        right hand side data
+        - sigma:    standard deviation of Gaussian noise
+        - a, at:    forward operator A and its transpose. Given as callable a(x), at(y)
     """
-    def __init__(self, d = None, mu = None, sigma2 = None, K = None):
-        if d is None and mu is None and K is None:
-            raise ValueError("Please supply dimension, mean or operator from which dimension can be inferred!")
-        # infer dimension from parameters
-        self.d = d if d is not None else (mu.shape[0] if mu is not None else K.shape[0])
-               
-        # set distribution parameters
-        self.mu = mu if mu is not None else np.zeros((self.d,1))
-        self.sigma2 = sigma2 if sigma2 is not None else 1
-        self.K, self.m = (K, K.shape[1]) if K is not None else (np.eye(self.d), self.d)
-        self.KTK = self.K.T @ self.K
+    def __init__(self, im_shape, y=None, sigma2=1, a=None, at=None):
+        self.im_shape = im_shape
+        self.d = np.prod(im_shape)
+        self.y = y
+        self.sigma2 = sigma2
+        
+        self.a = a
+        self.at = at
     
     def __call__(self, x):
         """
-        Accepts only inputs in R^(self.m x n_samples)
+        Accepts only inputs of shape self.im_shape
         """
-        return 1/(2*self.sigma2) * np.sum((self.K@x-self.mu)**2, axis=0)
+        return 1/(2*self.sigma2) * np.sum((self.a(x)-self.y)**2)
     
     def grad(self, x):
-        return 1/self.sigma2 * self.K.T@(np.reshape(self.K@x,(self.d,-1))-self.mu)
-    
-    def prox(self, x, gamma):
-        return np.linalg.solve(self.KTK + self.sigma2/gamma * np.eye(self.m), self.K.T@self.mu + self.sigma2/gamma * x)
-    
-    def conjProx(self, x, gamma):
-        return np.linalg.solve(self.KTK + gamma*self.sigma2*np.eye(self.m), self.KTK@x - gamma*(self.K.T@self.mu))
+        return 1/self.sigma2 * self.at(self.a(x)-self.y)
 
 
 class L1loss_scaled():
@@ -178,28 +165,37 @@ class KLDistance():
         Kub = self.K @ u + self.b
         return self.K.T @ (np.ones_like(self.v) - self.v/Kub)
     
-class TotalVariation_scaled():
+class total_variation():
     """
-    total variation of 2D image u with shape n1, n2, scaled by a constant
-    regularization parameter scale.
+    total variation of 2D image u with shape (n1, n2). Scaled by a constant
+    regularization parameter scale. Corresponds to the functional 
+        scale * TV(u)
+    with u in R^{n1 x n2}
     
-    Computed on a grid via finite differences, assuming equidistant spacing of 
-    the grid. The gradient of this potential does not exist since TV is not 
-    smooth.
+    __init__ input:
+        - n1, n2:   shape of u
+        - scale:    scaling factor, usually a regularization parameter
+        
+    __call__ input:
+        - u:        image of shape n1,n2 or n1*n2,
+                    
+    TV is computed on a grid via finite differences, assuming equidistant 
+    spacing of the grid. The gradient of this potential does not exist since 
+    TV is not smooth.
     The proximal mapping is approximated using the dual problem. Pass either 
     a maximum number of steps, an accuracy (in the primal-dual gap), or both 
     to the prox evaluation, for more details see 
-        TotalVariation_scaled.inexact_prox
+        total_variation.inexact_prox
         and
-        TotalVariation_scaled.inexact_prox_singleImage_vanillaGD
-        TotalVariation_scaled.inexact_prox_singleImage_acceleratedGD
+        total_variation._inexact_prox_singleImage_vanillaGD
+        total_variation._inexact_prox_singleImage_acceleratedGD
     """
     def __init__(self, n1, n2, scale=1):
         self.n1 = n1
         self.n2 = n2
         self.scale = scale
         
-    def D(self, u):
+    def _imgradient(self, u):
         """
         applies a 2D image gradient to the image u of shape (n1,n2)
         
@@ -217,7 +213,7 @@ class TotalVariation_scaled():
         py = np.concatenate((u[:,1:] - u[:,0:-1], np.zeros((self.n1,1))),axis=1)
         return self.scale*px, self.scale*py
     
-    def D_adj(self, px, py):
+    def _imdivergence(self, px, py):
         """
         Computes the negative divergence of the 2D vector field px,py.
         could als be seen as a tensor from R^(mxnx2) to R^(mxn) (for each input)
@@ -249,13 +245,10 @@ class TotalVariation_scaled():
         -------
         TV(u) (scalar)
         """
-        if u.shape[0] == self.n1*self.n2:
-            dx_u, dy_u = self.D(np.reshape(u,(self.n1,self.n2)))
-        else:
-            dx_u, dy_u = self.D(u)
+        dx_u, dy_u = self._imgradient(u)
         return self.scale*np.sum(np.sqrt(dx_u**2 + dy_u**2))
     
-    def __inexact_prox_singleImage_vanillaGD__(self, u, gamma=1, epsilon=None, maxiter=1e3, verbose=False):
+    def _inexact_prox_singleImage_vanillaGD(self, u, gamma=1, epsilon=None, maxiter=1e3, verbose=False):
         """
         Computing the prox of TV is solving the ROF model. See Chambolle, Pock 2016,
         Example 4.8 for a precise description of what is done here
@@ -268,7 +261,7 @@ class TotalVariation_scaled():
         # iterative scheme to minimize the dual objective
         px = np.zeros((self.n1,self.n2))  # solve for solution of the dual p using proximal gradient descent
         py = np.zeros((self.n1,self.n2))
-        Dadjp = self.D_adj(px, py)
+        d_adjoint_p = self._imdivergence(px, py)
         stopcrit = False
         tauprime = 0.99 * 1/8
         tau = 1
@@ -279,7 +272,7 @@ class TotalVariation_scaled():
         while i < maxiter and not stopcrit:
             i = i + 1
             # gradient of Moreau-Yosida regularization
-            zx,zy = self.D(Dadjp - u)
+            zx,zy = self._imgradient(d_adjoint_p - u)
             vx = px - tauprime * zx
             vy = py - tauprime * zy
             # project 
@@ -288,30 +281,30 @@ class TotalVariation_scaled():
             # explicit gradient descent step on the Moreau-Yosida regularization: Gradient is p-w, see Chambolle, Pock 2016
             px = px - tau*(px - wx)
             py = py - tau*(py - wy)
-            Dadjp = self.D_adj(px, py)
+            Dadjp = self._imdivergence(px, py)
             if checkAccuracy:
-                halfnormDadjp = 1/2 * np.sum(Dadjp**2)
-                # compute primal dual gap here and check if smaller than epsilon
-                P = gamma * self(u-Dadjp) + halfnormDadjp # primal value
+                h = 1/2 * np.sum(d_adjoint_p**2)
+                # stopping criterion: primal dual gap here less than epsilon.
+                P = gamma * self(u-Dadjp) + h # primal value
                 ndual = np.sqrt(px**2+py**2)
                 dualInadmissible = np.any(ndual > gamma*self.scale+1e-15)
-                Pconj = np.Inf if dualInadmissible else halfnormDadjp - np.sum(Dadjp * u)
+                Pconj = np.Inf if dualInadmissible else h - np.sum(d_adjoint_p * u)
                 dgap = P+Pconj
                 stopcrit = dgap < epsilon
-                if dgap < 0:
-                    raise ValueError('Bad, Bad, Bad! Duality gap was negative, please check your prox computation routine!')
+                if dgap < 0: # debugging purpose
+                    raise ValueError('Duality gap was negative, please check the prox computation routine!')
                 if verbose and (i%10 == 0 or stopcrit):
                     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
                 
-        return u - self.D_adj(px, py)
+        return u - self._imdivergence(px, py)
     
-    def __inexact_prox_singleImage_acceleratedGD__(self, u, gamma=1, epsilon=None, maxiter=1e3, verbose=False):
+    def _inexact_prox_singleImage_acceleratedGD(self, u, gamma=1, epsilon=None, maxiter=1e3, verbose=False):
         """
         Same as "_vanillaGD but using accelerated GD, see Chambolle & Pock 2016
         """
         checkAccuracy = True if epsilon is not None else False
         # iterative scheme to minimize the dual objective
-        px = np.zeros((self.n1,self.n2))  # solve for solution of the dual p using proximal gradient descent
+        px = np.zeros((self.n1,self.n2))  # solve for solution of the dual p using proximal accelerated gradient descent
         py = np.zeros((self.n1,self.n2))
         stopcrit = False
         tauprime = 0.99 * 1/8
@@ -332,7 +325,7 @@ class TotalVariation_scaled():
             qy = py_curr + (t_agd-1)/t_agd_new * (py_curr - py_prev)
             
             # compute the gradient of Moreau-Yosida regularization at qx,qy
-            zx,zy = self.D(self.D_adj(qx, qy) - u)
+            zx,zy = self._imgradient(self._imdivergence(qx, qy) - u)
             vx = qx - tauprime * zx
             vy = qy - tauprime * zy
             s = 1/np.maximum(1,1/(gamma*self.scale) * np.sqrt(vx**2 + vy**2))
@@ -348,13 +341,13 @@ class TotalVariation_scaled():
             
             # stopping criterion
             if checkAccuracy:
-                Dadjp = self.D_adj(px_curr, py_curr)
-                halfnormDadjp = 1/2 * np.sum(Dadjp**2)
+                d_adjoint_p = self._imdivergence(px_curr, py_curr)
+                h = 1/2 * np.sum(d_adjoint_p**2)
                 # compute primal dual gap here and check if smaller than epsilon
-                P = gamma * self(u-Dadjp) + halfnormDadjp # primal value
+                P = gamma * self(u-d_adjoint_p) + h # primal value
                 ndual = np.sqrt(px_curr**2 + py_curr**2)
                 dualInadmissible = np.any(ndual > gamma*self.scale+1e-12)
-                Pconj = np.Inf if dualInadmissible else halfnormDadjp - np.sum(Dadjp * u)
+                Pconj = np.Inf if dualInadmissible else h - np.sum(d_adjoint_p * u)
                 dgap = P+Pconj
                 stopcrit = dgap < epsilon
                 if dgap < 0:
@@ -362,25 +355,17 @@ class TotalVariation_scaled():
                 if verbose and (i%10 == 0 or stopcrit or i==maxiter):
                     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
                 
-        return u - self.D_adj(px_curr, py_curr)
+        return u - self._imdivergence(px_curr, py_curr)
     
     def inexact_prox(self, u, gamma=1, epsilon=None, maxiter=1e3, verbose=False, gd_type='accelerated'):
         """
-        Calls the inexact_prox routines in a loop for all samples.
-        Maybe to be parallelized later...
+        Computes the proximal mapping of TV, i.e., solves the ROF problem
+            argmin_v {TV(v) + 1/(2*gamma)|||v-u||_2^2}
         """
-        n_samples = u.shape[1]
-        r = np.zeros_like(u)
-        for i in np.arange(n_samples):
-            v = np.reshape(u[:,i],(self.n1,self.n2))
-            if gd_type == 'accelerated':
-                proxv = self.__inexact_prox_singleImage_acceleratedGD__(v, gamma, epsilon, maxiter, verbose)
-            elif gd_type == 'vanilla':
-                proxv = self.__inexact_prox_singleImage_vanillaGD__(v, gamma, epsilon, maxiter, verbose)
-            else:
-                raise ValueError("Invalid gradient descent type, use 'accelerated' (default) or 'vanilla'")
-            r[:,i] = np.reshape(proxv,(-1,))
-        return r
+        if gd_type == 'accelerated':
+            return self._inexact_prox_singleImage_acceleratedGD(u, gamma, epsilon, maxiter, verbose)
+        elif gd_type == 'vanilla':
+            return self._inexact_prox_singleImage_vanillaGD(u, gamma, epsilon, maxiter, verbose)
     
     def rescale(self, scale_new):
         self.scale = self.scale_new
@@ -402,7 +387,7 @@ class nonNegIndicator():
         return np.maximum(x,0)
     
 # a dummy class if we want to set F or G to zero
-class Zero():
+class zero():
     def __call__(self, x):
         return np.zeros((1,x.shape[1])) if len(x.shape) > 1 else 0
     
@@ -412,7 +397,7 @@ class Zero():
     def prox(self, x):
         return np.copy(x)
     
-class L2loss_heteroschedastic():
+class l2_loss_heteroschedastic():
     """
     symbolizes the weighted l2-norm for d-dimensional vectors. Is used to generate 
     normal distributions and the data-fidelity/log-likelihood in problems with 
