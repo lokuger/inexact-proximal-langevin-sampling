@@ -38,10 +38,12 @@ class inexact_pla():
         if verbose:
             print('Running inexact PLA')
             sys.stdout.write('Sampling progress: {:3d}%'.format(0))
+            sys.stdout.flush()
         while self.iter < self.n_iter:
             self.update()
             if verbose > 0:
                 sys.stdout.write('\b'*4+'{:3d}%'.format(int(self.iter/self.n_iter*100)))
+                sys.stdout.flush()
             #W2dist[self.iter] = ot.emd2_1d(np.reshape(self.x,(-1,)), np.reshape(x_comp,(-1,)))
     
     def update(self):

@@ -24,7 +24,7 @@ from inexact_pla import inexact_pla
 
 #%% parameters
 params = {
-    'iterations': 1000,
+    'iterations': 100,
     'num_chains': 1,
     'testfile_path' : 'test_images/cameraman.tif',     # relative path to test image
     'num_cores' : 1,
@@ -79,12 +79,12 @@ def main():
     tv_groundtruth = tv(x)
     
     """ Generate noisy observation: normally distributed/Gaussian noise model"""
-    blur_width = 10
-    a,at,max_ev = blur(n,blur_width)                        # blur operator
-    # a,at,max_ev = lambda x : x, lambda x : x, 1    # only denoising
+    blur_width = 0
+    # a,at,max_ev = blur(n,blur_width)                        # blur operator
+    a,at,max_ev = lambda x : x, lambda x : x, 1    # only denoising
     
     y = a(x)
-    noise_snr = 40 # [dB] of blurred snr
+    noise_snr = 20 # [dB] of blurred snr
     noise_std = np.std(y)*10**(-noise_snr/20)
     y = y + noise_std*rng.normal(size=(n,n))
     
@@ -95,17 +95,17 @@ def main():
     L = max_ev/noise_std**2
    
     """ determine optimal theta using SAPG """
-    iter_outer = 100
-    iter_burnin = 50
+    iter_outer = 50
+    iter_burnin = 20
     theta0 = 0.01
     # empirically, for blur b=10 we need ~800 warm up iterations with tau = 0.9/L. 
     # for blur=5 roughly 400 warm up iterations
     # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
-    s = sapg(iter_wu=750,
+    s = sapg(iter_wu=50,
              iter_outer=iter_outer,
              iter_burnin=iter_burnin,
              iter_inner=1,
-             tau=0.9/L,
+             tau=0.1/L,
              delta=lambda k: 0.1/(theta0*n**2) * (k+1)**(-0.8),
              x0=y,
              theta0=theta0,
@@ -149,8 +149,8 @@ def main():
     x0 = s.x # use last SAPG iterate as initializer, alternatively run separate warm-up
     n_iter = params['iterations']
     tau = 0.9/L
-    epsilon_prox = 1e-1
-    ipla = inexact_pla(n_iter, tau=0.9/L, x0=x0, epsilon=epsilon_prox, pd=posterior)
+    epsilon_prox = 1e-3
+    ipla = inexact_pla(n_iter, tau=tau, x0=x0, epsilon=epsilon_prox, pd=posterior)
     ipla.simulate()
     
     # compute and save mmse and std images
@@ -167,20 +167,21 @@ def main():
     plt.title('Sample standard deviation')
     plt.show()
     
-    result_path = 'results/blur{}/snr{}'.format(blur_width,noise_snr)
+    result_path = 'results/{}/blur{}/snr{}'.format(params['testfile_path'].split('/')[1][:-4],blur_width,noise_snr)
     Path(result_path).mkdir(exist_ok=True,parents=True)
+    mmse_samples = np.maximum(np.minimum(mmse_samples,255),0)
     iio.imwrite(result_path+'/mmse.png',mmse_samples.astype('uint8'))
     iio.imwrite(result_path+'/std.png',std_samples.astype('uint8'))
     
     
 def print_help():
-    print('<>'*30)
+    print('<>'*33)
     print(' Run inexact PLA to generate samples for TV deblurring posterior ')
-    print('<>'*30)
+    print('<>'*33)
     print(' ')
     print('Options:')
     print('    -h (--help): Print help.')
-    print('    -i (--iterations): Number of iterations of each Markov chain')
+    print('    -i (--iterations=): Number of iterations of each Markov chain')
     print('    -z (--num_chains=): Number of Markov chains to run')
     print('    -f (--testfile_path=): Path to test image file')
     print('    -p (--parallel): Use parallel processing for several chains.')

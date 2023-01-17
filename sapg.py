@@ -84,14 +84,17 @@ class sapg():
         if verbose:
             print('Running SAPG to determine optimal regularization parameter')
             sys.stdout.write('Warming up Markov chain: {:3d}%'.format(0))
+            sys.stdout.flush()
         self.warmup(verbose)
         if verbose:
             sys.stdout.write('\nRun SAPG: {:3d}%'.format(0))
+            sys.stdout.flush()
         while self.i_out < self.iter_outer:
             self.i_out += 1
             self.outer()
             if verbose:
                 sys.stdout.write('\b'*4+'{:3d}%'.format(int(self.i_out/self.iter_outer*100)))
+                sys.stdout.flush()
         if verbose:
             print('\nFinal estimate of regularization parameter: {:.4f}\n'.format(self.mean_theta[-1]))
     
@@ -110,6 +113,7 @@ class sapg():
             self.logpi_wu[self.i_wu-1] = - self.f(self.x) - self.theta[0]*self.g(self.x)
             if verbose:
                 sys.stdout.write('\b'*4+'{:3d}%'.format(int(self.i_wu/self.iter_wu*100)))
+                sys.stdout.flush()
     
     def outer(self):
         self.i_in = 0
