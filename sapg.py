@@ -107,7 +107,7 @@ class sapg():
             if self.prox_is_exact:
                 self.x = self.prox_g(y, gamma=self.tau*self.theta[0])
             else:
-                self.x = self.prox_g(y, gamma=self.tau*self.theta[0], epsilon=self.eps_prox)
+                self.x, _ = self.prox_g(y, gamma=self.tau*self.theta[0], epsilon=self.eps_prox)
             self.dfx = self.df(self.x)
             # monitor likelihood during warm-up to estimate burn-in time
             self.logpi_wu[self.i_wu-1] = - self.f(self.x) - self.theta[0]*self.g(self.x)
@@ -137,6 +137,6 @@ class sapg():
         if self.prox_is_exact:
             self.x = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1])
         else:
-            self.x = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1], epsilon=self.eps_prox)
+            self.x, _ = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1], epsilon=self.eps_prox)
         self.dfx = self.df(self.x)
         

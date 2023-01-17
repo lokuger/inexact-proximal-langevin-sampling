@@ -30,6 +30,7 @@ class inexact_pla():
         self.tau = lambda n : tau if np.isscalar(tau) else tau
         self.epsilon = lambda n : epsilon if np.isscalar(epsilon) else epsilon
         self.logpi_iterates = np.zeros((n_iter,))
+        self.num_prox_iterations_total = 0
     
     def simulate(self, verbose=1):
         # from wasserstein comparisons:
@@ -45,7 +46,9 @@ class inexact_pla():
                 sys.stdout.write('\b'*4+'{:3d}%'.format(int(self.iter/self.n_iter*100)))
                 sys.stdout.flush()
             #W2dist[self.iter] = ot.emd2_1d(np.reshape(self.x,(-1,)), np.reshape(x_comp,(-1,)))
-    
+        if verbose > 0:
+            sys.stdout.write('\n')
+        
     def update(self):
         self.iter = self.iter + 1
         xi = self.rng.normal(size=self.shape_x)
@@ -53,10 +56,10 @@ class inexact_pla():
         epsilon = self.epsilon(self.iter)
         
         y = self.x[:,:,self.iter-1] - tau * self.dfx + np.sqrt(2*tau) * xi
-        x = self.inexact_prox_g(y, gamma=tau, epsilon=epsilon, verbose=False)
+        x, num_its = self.inexact_prox_g(y, gamma=tau, epsilon=epsilon, verbose=False)
         self.x[:,:,self.iter] = x
         self.dfx = self.df(x)
         self.logpi_iterates[self.iter-1] = - self.f(x) - self.g(x)
         
-        
+        self.num_prox_iterations_total += num_its
         

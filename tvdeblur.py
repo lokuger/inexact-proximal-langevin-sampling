@@ -24,7 +24,7 @@ from inexact_pla import inexact_pla
 
 #%% parameters
 params = {
-    'iterations': 100,
+    'iterations': 25,
     'num_chains': 1,
     'testfile_path' : 'test_images/cameraman.tif',     # relative path to test image
     'num_cores' : 1,
@@ -84,7 +84,7 @@ def main():
     a,at,max_ev = lambda x : x, lambda x : x, 1    # only denoising
     
     y = a(x)
-    noise_snr = 20 # [dB] of blurred snr
+    noise_snr = 10 # [dB] of blurred snr
     noise_std = np.std(y)*10**(-noise_snr/20)
     y = y + noise_std*rng.normal(size=(n,n))
     
@@ -111,21 +111,27 @@ def main():
              theta0=theta0,
              theta_min=0.001,
              theta_max=1,
-             epsilon_prox=1e-1,
+             epsilon_prox=3e-2,
              pd=unscaled_posterior)
     s.simulate()
     # the computed optimal regularization parameter
     mu_tv = s.mean_theta[-1]
     
-    # plt.imshow(x,cmap='Greys_r')
-    # plt.title('True image')
-    # plt.colorbar()
-    # plt.show()
+    plt.imshow(x,cmap='Greys_r',vmin=0,vmax=255)
+    plt.title('True image')
+    plt.colorbar()
+    plt.show()
     
-    # plt.imshow(y,cmap='Greys_r')
-    # plt.title('Blurred & noisy image')
-    # plt.colorbar()
-    # plt.show()
+    plt.imshow(y,cmap='Greys_r',vmin=0,vmax=255)
+    plt.title('Blurred & noisy image')
+    plt.colorbar()
+    plt.show()
+    
+    z,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e1, verbose=True)
+    plt.imshow(z,cmap='Greys_r',vmin=0,vmax=255)
+    plt.title('Denoised image')
+    plt.colorbar()
+    plt.show()
     
     # """ -- plots to check that SAPG converged -- """
     # plt.plot(s.logpi_wu, label='log-likelihood warm-up samples')
@@ -145,33 +151,36 @@ def main():
     # plt.legend()
     # plt.show()
     
+    """ iPLA sampling """
     posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
-    x0 = s.x # use last SAPG iterate as initializer, alternatively run separate warm-up
-    n_iter = params['iterations']
-    tau = 0.9/L
-    epsilon_prox = 1e-3
-    ipla = inexact_pla(n_iter, tau=tau, x0=x0, epsilon=epsilon_prox, pd=posterior)
-    ipla.simulate()
-    
-    # compute and save mmse and std images
-    mmse_samples = np.mean(ipla.x,axis=2)
-    std_samples = np.std(ipla.x,axis=2)
-    
-    plt.imshow(mmse_samples, cmap='Greys_r')
-    plt.colorbar()
-    plt.title('Sample mean')
-    plt.show()
-    
-    plt.imshow(std_samples, cmap='Greys_r')
-    plt.colorbar()
-    plt.title('Sample standard deviation')
-    plt.show()
-    
-    result_path = 'results/{}/blur{}/snr{}'.format(params['testfile_path'].split('/')[1][:-4],blur_width,noise_snr)
-    Path(result_path).mkdir(exist_ok=True,parents=True)
-    mmse_samples = np.maximum(np.minimum(mmse_samples,255),0)
-    iio.imwrite(result_path+'/mmse.png',mmse_samples.astype('uint8'))
-    iio.imwrite(result_path+'/std.png',std_samples.astype('uint8'))
+    for epsilon_prox in 10**np.arange(-3,2,1.0):
+        x0 = s.x # use last SAPG iterate as initializer, alternatively run separate warm-up
+        n_iter = params['iterations']
+        tau = 0.9/L
+        
+        ipla = inexact_pla(n_iter, tau=tau, x0=x0, epsilon=epsilon_prox, pd=posterior)
+        ipla.simulate()
+        
+        # compute and save mmse and std images
+        mmse_samples = np.mean(ipla.x,axis=2)
+        std_samples = np.std(ipla.x,axis=2)
+        
+        plt.imshow(mmse_samples, cmap='Greys_r')
+        plt.colorbar()
+        plt.title('Sample mean')
+        plt.show()
+        
+        # plt.imshow(std_samples, cmap='Greys_r')
+        # plt.colorbar()
+        # plt.title('Sample standard deviation')
+        # plt.show()
+        
+        result_path = 'results/{}/blur{}/snr{}/logeps{}'.format(params['testfile_path'].split('/')[1][:-4],blur_width,noise_snr,int(np.log10(epsilon_prox)))
+        Path(result_path).mkdir(exist_ok=True,parents=True)
+        mmse_samples = np.maximum(np.minimum(mmse_samples,255),0)
+        # iio.imwrite(result_path+'/mmse.png',mmse_samples.astype('uint8'))
+        # iio.imwrite(result_path+'/std.png',std_samples.astype('uint8'))
+        print('Finished run with epsilon = 10^{}. Total number of agd steps to compute proximal points: {}'.format(int(np.log10(epsilon_prox)),ipla.num_prox_iterations_total))
     
     
 def print_help():

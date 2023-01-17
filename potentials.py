@@ -315,7 +315,7 @@ class total_variation():
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose and (i%10 == 0 or stopcrit or i==maxiter):
                     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
-        return u - self._imdivergence(px_curr, py_curr)
+        return (u - self._imdivergence(px_curr, py_curr)), i
     
     def rescale(self, scale_new):
         self.scale = self.scale_new
