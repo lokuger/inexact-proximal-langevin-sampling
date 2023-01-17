@@ -1,41 +1,41 @@
 import numpy as np
 import warnings
     
-class l2_loss_homoschedastic():
-    """
-    a simplified form of the l2_loss_heteroschedastic class that is faster for 
-    the (very common) special case that the variance matrix is sigma^2*I
+# class l2_loss_homoschedastic():
+#     """
+#     a simplified form of the l2_loss_heteroschedastic class that is faster for 
+#     the (very common) special case that the variance matrix is sigma^2*I
     
-    F(x) = 1/(2*sigma^2) * ||x - y||_2^2
+#     F(x) = 1/(2*sigma^2) * ||x - y||_2^2
     
-    __init__ input parameters:
-        - d:        dimension of x, can be inferred from mu if mu is given
-        - y:        shift parameter/data, e.g. noisy image in denoising
-        - sigma2:   noise variance of noise
+#     __init__ input parameters:
+#         - d:        dimension of x, can be inferred from mu if mu is given
+#         - y:        shift parameter/data, e.g. noisy image in denoising
+#         - sigma2:   noise variance of noise
     
-    __call__ input parameter:
-        - x:        image of shape self.im_shape
-    """
-    def __init__(self, im_shape, y=None, sigma2=1):
-        self.im_shape = self.im_shape
-        self.d = np.prod(im_shape)
-        self.y = y if y is not None else np.zeros(im_shape)
-        self.sigma2=1
+#     __call__ input parameter:
+#         - x:        image of shape self.im_shape
+#     """
+#     def __init__(self, im_shape, y=None, sigma2=1):
+#         self.im_shape = self.im_shape
+#         self.d = np.prod(im_shape)
+#         self.y = y if y is not None else np.zeros(im_shape)
+#         self.sigma2=1
     
-    def __call__(self, x):
-        return 1/(2*self.sigma2) * np.sum((x-self.y)**2)
+#     def __call__(self, x):
+#         return 1/(2*self.sigma2) * np.sum((x-self.y)**2)
     
-    def grad(self, x):
-        return 1/self.sigma2 * (x-self.y)
+#     def grad(self, x):
+#         return 1/self.sigma2 * (x-self.y)
     
-    def prox(self, x, gamma = 1):
-        return 1/(self.sigma2+gamma)*(self.sigma2*x+gamma*self.y)
+#     def prox(self, x, gamma = 1):
+#         return 1/(self.sigma2+gamma)*(self.sigma2*x+gamma*self.y)
     
-    def conj(self, x):
-        return self.sigma2/2 * np.sum(x**2, axis=0) + np.sum(x * self.y, axis=0)
+#     def conj(self, x):
+#         return self.sigma2/2 * np.sum(x**2, axis=0) + np.sum(x * self.y, axis=0)
     
-    def conjProx(self, x, gamma = 1):
-        return 1/(1+gamma*self.sigma2)*(x-gamma*self.y)
+#     def conjProx(self, x, gamma = 1):
+#         return 1/(1+gamma*self.sigma2)*(x-gamma*self.y)
     
 class l2_loss_reconstruction_homoschedastic():
     """
@@ -71,99 +71,99 @@ class l2_loss_reconstruction_homoschedastic():
         return 1/self.sigma2 * self.at(self.a(x)-self.y)
 
 
-class L1loss_scaled():
-    """
-    symbolizes the L1-norm, weighted by a parameter scale. Used for 
-    L1-regularization or the Laplace distribution
-    G(u) = scale * ||u - mu||_1
-    """
-    def __init__(self, d = None, mu = None, scale = 1):
-        if d is None and mu is None:
-            raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
+# class L1loss_scaled():
+#     """
+#     symbolizes the L1-norm, weighted by a parameter scale. Used for 
+#     L1-regularization or the Laplace distribution
+#     G(u) = scale * ||u - mu||_1
+#     """
+#     def __init__(self, d = None, mu = None, scale = 1):
+#         if d is None and mu is None:
+#             raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
         
-        # infer dimension by parameters
-        self.d = d if d is not None else mu.shape[0]
+#         # infer dimension by parameters
+#         self.d = d if d is not None else mu.shape[0]
         
-        # set distribution parameters
-        self.mu = mu if mu is not None else np.zeros((self.d,1))
-        self.scale = scale
+#         # set distribution parameters
+#         self.mu = mu if mu is not None else np.zeros((self.d,1))
+#         self.scale = scale
     
-    def __call__(self, x):
-        return np.sum(np.abs(x-self.mu),axis=0,keepdims=True)*self.scale
+#     def __call__(self, x):
+#         return np.sum(np.abs(x-self.mu),axis=0,keepdims=True)*self.scale
     
-    def grad(self, x):
-        raise NotImplementedError("L1norm does not have a gradient, use prox operator instead!")
+#     def grad(self, x):
+#         raise NotImplementedError("L1norm does not have a gradient, use prox operator instead!")
     
-    def prox(self, x, gamma = 1):
-        return np.sign(x-self.mu) * np.maximum(0, np.abs(x-self.mu)-gamma*self.scale) + self.mu
+#     def prox(self, x, gamma = 1):
+#         return np.sign(x-self.mu) * np.maximum(0, np.abs(x-self.mu)-gamma*self.scale) + self.mu
     
-    def inexact_prox(self, x, gamma = 1, epsilon=None, maxiter=1e2, verbose=False):
-        """Careful, noticed that this implementation is only correct if 
-        self.mu = 0. Of course, this is the interesting case """
-        gamma *= self.scale
-        checkAccuracy = epsilon is not None
-        # iterative scheme to minimize the dual objective
-        y = np.zeros_like(x)  # solve for solution y of the dual using proximal gradient descent
-        stopcrit = False
-        tauprime = 0.99
-        tau = 1  # tau = 1 would be the most efficient but we want to make the routine artificially bad! Recheck this later.
-        i = 0
-        if checkAccuracy and verbose:
-            print('Run (backward) gradient descent on the dual Lasso with gamma*mu = {:.3e}'.format(gamma))
-            print('|{:^11s}|{:^31s}|'.format('Iterate','D-Gap (stop if < {:.3e})'.format(epsilon)))
-        while i < maxiter and not stopcrit:
-            i = i + 1
-            v = (1-tauprime)*y + tauprime*x
-            n = np.abs(v)
-            w = v/np.maximum(1,1/gamma * n)
-            # explicit gradient descent step on the Moreau-Yosida regularization: Gradient is y-w, see Chambolle, Pock 2016
-            y = y - tau*(y - w)
-            if checkAccuracy:
-                halfsquarednormy = 1/2 * np.sum(y**2)
-                # compute primal dual gap here and check if smaller than epsilon
-                P = gamma * self(x-y)[0,0] + halfsquarednormy # primal value
-                ndual = np.sqrt(y**2)
-                dualInadmissible = np.any(ndual > gamma+1e-15)
-                Pconj = np.Inf if dualInadmissible else halfsquarednormy - np.sum(y * x)
-                dgap = P+Pconj
-                stopcrit = dgap < epsilon
-                if verbose and (i%25 == 0 or stopcrit):
-                    print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
-        return x - y
+#     def inexact_prox(self, x, gamma = 1, epsilon=None, maxiter=1e2, verbose=False):
+#         """Careful, noticed that this implementation is only correct if 
+#         self.mu = 0. Of course, this is the interesting case """
+#         gamma *= self.scale
+#         checkAccuracy = epsilon is not None
+#         # iterative scheme to minimize the dual objective
+#         y = np.zeros_like(x)  # solve for solution y of the dual using proximal gradient descent
+#         stopcrit = False
+#         tauprime = 0.99
+#         tau = 1  # tau = 1 would be the most efficient but we want to make the routine artificially bad! Recheck this later.
+#         i = 0
+#         if checkAccuracy and verbose:
+#             print('Run (backward) gradient descent on the dual Lasso with gamma*mu = {:.3e}'.format(gamma))
+#             print('|{:^11s}|{:^31s}|'.format('Iterate','D-Gap (stop if < {:.3e})'.format(epsilon)))
+#         while i < maxiter and not stopcrit:
+#             i = i + 1
+#             v = (1-tauprime)*y + tauprime*x
+#             n = np.abs(v)
+#             w = v/np.maximum(1,1/gamma * n)
+#             # explicit gradient descent step on the Moreau-Yosida regularization: Gradient is y-w, see Chambolle, Pock 2016
+#             y = y - tau*(y - w)
+#             if checkAccuracy:
+#                 halfsquarednormy = 1/2 * np.sum(y**2)
+#                 # compute primal dual gap here and check if smaller than epsilon
+#                 P = gamma * self(x-y)[0,0] + halfsquarednormy # primal value
+#                 ndual = np.sqrt(y**2)
+#                 dualInadmissible = np.any(ndual > gamma+1e-15)
+#                 Pconj = np.Inf if dualInadmissible else halfsquarednormy - np.sum(y * x)
+#                 dgap = P+Pconj
+#                 stopcrit = dgap < epsilon
+#                 if verbose and (i%25 == 0 or stopcrit):
+#                     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
+#         return x - y
         
-class KLDistance():
-    """
-    Kullback Leibler distance KL(Ku+b, v)
-    with background b,
-    data observation v,
-    linear transformation K.
-    """
-    def __init__(self, data = None, background = None, K = None):
-        self.v = data
-        self.m = self.v.shape[0]
-        self.d = K.shape[1] if K is not None else self.v.shape[0]
-        self.b = background if background is not None else np.zeros((self.m,1))
-        self.K = K if K is not None else np.eye(self.d)
+# class KLDistance():
+#     """
+#     Kullback Leibler distance KL(Ku+b, v)
+#     with background b,
+#     data observation v,
+#     linear transformation K.
+#     """
+#     def __init__(self, data = None, background = None, K = None):
+#         self.v = data
+#         self.m = self.v.shape[0]
+#         self.d = K.shape[1] if K is not None else self.v.shape[0]
+#         self.b = background if background is not None else np.zeros((self.m,1))
+#         self.K = K if K is not None else np.eye(self.d)
         
-    def __call__(self, u):
-        Ku = self.K @ u
-        # be careful with this next line - it is here since the stepsize 
-        # backtracking naturally jumps too far and considers points u where 
-        # Ku < 0. We set these to the corresponding axis to prevent warnings.
-        Ku[Ku<0] = 0
-        # from here everything's fine again
-        Kub = Ku + self.b
-        return np.sum(Kub - self.v + self.v*np.log(self.v/Kub), axis=0)
+#     def __call__(self, u):
+#         Ku = self.K @ u
+#         # be careful with this next line - it is here since the stepsize 
+#         # backtracking naturally jumps too far and considers points u where 
+#         # Ku < 0. We set these to the corresponding axis to prevent warnings.
+#         Ku[Ku<0] = 0
+#         # from here everything's fine again
+#         Kub = Ku + self.b
+#         return np.sum(Kub - self.v + self.v*np.log(self.v/Kub), axis=0)
     
-    def grad(self, u):
-        """
-        The KL distance is gradient Lipschitz with constant L; where the best (smallest)
-        L can be bounded by the easily computable constant
-        v_1/(b_1^2) * norm(K_1)^2 + ... + v_m/(b_m^2) * norm(K_m)^2
-        where K_i are the lines of the matrix K. See Obsidian notes for details
-        """
-        Kub = self.K @ u + self.b
-        return self.K.T @ (np.ones_like(self.v) - self.v/Kub)
+#     def grad(self, u):
+#         """
+#         The KL distance is gradient Lipschitz with constant L; where the best (smallest)
+#         L can be bounded by the easily computable constant
+#         v_1/(b_1^2) * norm(K_1)^2 + ... + v_m/(b_m^2) * norm(K_m)^2
+#         where K_i are the lines of the matrix K. See Obsidian notes for details
+#         """
+#         Kub = self.K @ u + self.b
+#         return self.K.T @ (np.ones_like(self.v) - self.v/Kub)
     
 class total_variation():
     """
@@ -211,7 +211,7 @@ class total_variation():
         """
         px = np.concatenate((u[1:,:] - u[0:-1,:], np.zeros((1,self.n2))),axis=0)
         py = np.concatenate((u[:,1:] - u[:,0:-1], np.zeros((self.n1,1))),axis=1)
-        return self.scale*px, self.scale*py
+        return px, py
     
     def _imdivergence(self, px, py):
         """
@@ -231,7 +231,7 @@ class total_variation():
         """
         u1 = np.concatenate((-px[0,:][np.newaxis,:], -(px[1:-1,:]-px[0:-2,:]), px[-2,:][np.newaxis,:]), axis = 0)
         u2 = np.concatenate((-py[:,0][:,np.newaxis], -(py[:,1:-1]-py[:,0:-2]), py[:,-2][:,np.newaxis]), axis = 1)
-        return self.scale*(u1+u2)
+        return u1+u2
     
     def __call__(self, u):
         """
@@ -318,171 +318,171 @@ class total_variation():
         return (u - self._imdivergence(px_curr, py_curr)), i
     
     def rescale(self, scale_new):
-        self.scale = self.scale_new
+        self.scale = scale_new
         
     
-class nonNegIndicator():
-    """ 
-    Indicator function of R_++^d, 0 if all entries are >= 0, otherwise infinity
-    """
-    def __init__(self, d):
-        self.d = d
+# class nonNegIndicator():
+#     """ 
+#     Indicator function of R_++^d, 0 if all entries are >= 0, otherwise infinity
+#     """
+#     def __init__(self, d):
+#         self.d = d
     
-    def __call__(self, x):
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="invalid value encountered in multiply")
-            return np.nan_to_num(np.infty * (1-(np.min(x, axis=0) >= 0)), 0)
+#     def __call__(self, x):
+#         with warnings.catch_warnings():
+#             warnings.filterwarnings("ignore", message="invalid value encountered in multiply")
+#             return np.nan_to_num(np.infty * (1-(np.min(x, axis=0) >= 0)), 0)
         
-    def prox(self, x, gamma):
-        return np.maximum(x,0)
+#     def prox(self, x, gamma):
+#         return np.maximum(x,0)
     
-# a dummy class if we want to set F or G to zero
-class zero():
-    def __call__(self, x):
-        return np.zeros((1,x.shape[1])) if len(x.shape) > 1 else 0
+# # a dummy class if we want to set F or G to zero
+# class zero():
+#     def __call__(self, x):
+#         return np.zeros((1,x.shape[1])) if len(x.shape) > 1 else 0
     
-    def grad(self, x):
-        return np.zeros_like(x)
+#     def grad(self, x):
+#         return np.zeros_like(x)
     
-    def prox(self, x):
-        return np.copy(x)
+#     def prox(self, x):
+#         return np.copy(x)
     
-class l2_loss_heteroschedastic():
-    """
-    symbolizes the weighted l2-norm for d-dimensional vectors. Is used to generate 
-    normal distributions and the data-fidelity/log-likelihood in problems with 
-    Gaussian noise.
-    """
-    def __init__(self, d = None, mu = None, Var = None):
-        if d is None and mu is None and Var is None:
-            raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
-        # infer dimension from parameters
-        self.d = d if d is not None else (mu.shape[0] if mu is not None else Var.shape[0])
+# class l2_loss_heteroschedastic():
+#     """
+#     symbolizes the weighted l2-norm for d-dimensional vectors. Is used to generate 
+#     normal distributions and the data-fidelity/log-likelihood in problems with 
+#     Gaussian noise.
+#     """
+#     def __init__(self, d = None, mu = None, Var = None):
+#         if d is None and mu is None and Var is None:
+#             raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
+#         # infer dimension from parameters
+#         self.d = d if d is not None else (mu.shape[0] if mu is not None else Var.shape[0])
                
-        # set distribution parameters
-        self.mu = mu if mu is not None else np.zeros((self.d,1))
-        if Var is None:
-            self.Var = np.eye(self.d)
-            self.Prec = np.eye(self.d)
-        elif np.isscalar(Var):
-            self.Var = Var*np.eye(self.d)
-            self.Prec = 1/Var*np.eye(self.d)
-        else:
-            self.Var = Var
-            self.Prec = np.linalg.inv(self.Var)
+#         # set distribution parameters
+#         self.mu = mu if mu is not None else np.zeros((self.d,1))
+#         if Var is None:
+#             self.Var = np.eye(self.d)
+#             self.Prec = np.eye(self.d)
+#         elif np.isscalar(Var):
+#             self.Var = Var*np.eye(self.d)
+#             self.Prec = 1/Var*np.eye(self.d)
+#         else:
+#             self.Var = Var
+#             self.Prec = np.linalg.inv(self.Var)
     
-    def __call__(self, x):
-        return 1/2 * np.sum((x-self.mu) * (self.Prec @ (x-self.mu)), axis=0)
+#     def __call__(self, x):
+#         return 1/2 * np.sum((x-self.mu) * (self.Prec @ (x-self.mu)), axis=0)
     
-    def grad(self, x):
-        return self.Prec @ (x-self.mu)
+#     def grad(self, x):
+#         return self.Prec @ (x-self.mu)
     
-    def prox(self, x, gamma = 1):
-        return np.linalg.solve(self.Var+gamma*np.eye(self.d), self.Var@x + gamma*self.mu)
+#     def prox(self, x, gamma = 1):
+#         return np.linalg.solve(self.Var+gamma*np.eye(self.d), self.Var@x + gamma*self.mu)
     
-    def conj(self, y):
-        return 1/2 * np.sum(y * self.Var @ y, axis=0) + np.sum(y * self.mu, axis=0)
+#     def conj(self, y):
+#         return 1/2 * np.sum(y * self.Var @ y, axis=0) + np.sum(y * self.mu, axis=0)
     
-    def conjProx(self, x, gamma = 1):
-        return np.linalg.solve(np.eye(self.d)+gamma*self.Var, x-gamma*self.mu)
+#     def conjProx(self, x, gamma = 1):
+#         return np.linalg.solve(np.eye(self.d)+gamma*self.Var, x-gamma*self.mu)
     
-class Log_Gamma1D():
-    """
-    negative Log-density of a 1D Gamma distribution with parameters
-    - shape: alpha > 0
-    - rate: beta > 0
-    """
-    def __init__(self, alpha = 1, beta = 0.5):
-        self.alpha = alpha
-        self.beta = beta
+# class Log_Gamma1D():
+#     """
+#     negative Log-density of a 1D Gamma distribution with parameters
+#     - shape: alpha > 0
+#     - rate: beta > 0
+#     """
+#     def __init__(self, alpha = 1, beta = 0.5):
+#         self.alpha = alpha
+#         self.beta = beta
     
-    def __call__(self, x):
-        admissible_idcs = x>0
-        r = np.inf*np.ones_like(x)
-        r[admissible_idcs] = (1-self.alpha)*np.log(x[admissible_idcs]) + self.beta * x[admissible_idcs]
-        return r
+#     def __call__(self, x):
+#         admissible_idcs = x>0
+#         r = np.inf*np.ones_like(x)
+#         r[admissible_idcs] = (1-self.alpha)*np.log(x[admissible_idcs]) + self.beta * x[admissible_idcs]
+#         return r
     
-    def prox(self, x, gamma = 1):
-        return x/2 - self.beta*gamma/2 + np.sqrt(
-            1/4* (x**2) - x*self.beta*gamma/2 + (self.beta**2)*(gamma**2)/4 - gamma*(1-self.alpha))
+#     def prox(self, x, gamma = 1):
+#         return x/2 - self.beta*gamma/2 + np.sqrt(
+#             1/4* (x**2) - x*self.beta*gamma/2 + (self.beta**2)*(gamma**2)/4 - gamma*(1-self.alpha))
     
-    def inexact_prox(self, x, gamma = 1, epsilon=None, maxiter=1e3):
-        """comment: we do actually know the exact prox (see above), 
-        this is only to compare inexact psgla and psgla
-        The inexact prox computes the prox by iteratively solving the dual
-        problem using gradient descent.
-        The dual problem is given by
-        - min_v {(gamma*v - x)^2/(2*gamma) - x^2/(2*gamma) + (alpha-1)*(log((alpha-1)/(beta-v)) - 1)}
-            =: - min_v Psi_gamma(v)
-        Once the dual solution v is approximated, the approximation to the 
-        prox evaluation is   x - gamma*v
-        Check the accuracy by bounding the duality gap Phi(y)+Psi(v)
-        """
-        checkAccuracy = True if epsilon is not None else False
-        # iterative scheme to minimize the dual objective
-        v = np.zeros_like(x)    # function is only defined on [-Inf, beta], beta > 0, hence initilizing at 0 might be safe
-        stopcrit = np.full(x.shape, False)
-        tau = 1/(gamma + (self.alpha-1)/(self.beta**2)) # since optimal v < 0 and initialize at 0, this is lower bound for 1/L
-        i = 0
-        while i < maxiter and not np.all(stopcrit):
-            i = i + 1
-            # update v
-            v[~stopcrit] = v[~stopcrit] - tau * (gamma*v[~stopcrit] - x[~stopcrit] + (1-self.alpha)/(v[~stopcrit]-self.beta))
-            if checkAccuracy:
-                # compute primal dual gap here and check if smaller than epsilon
-                P = self(x-gamma*v) + gamma/2 * v**2  # primal value
-                Pconj = ((gamma*v-x)**2)/(2*gamma) - (x**2)/(2*gamma) + (self.alpha-1)*(np.log((self.alpha-1)/(self.beta-v)) - 1)
-                stopcrit = P + Pconj < epsilon
-        return x - gamma*v
+#     def inexact_prox(self, x, gamma = 1, epsilon=None, maxiter=1e3):
+#         """comment: we do actually know the exact prox (see above), 
+#         this is only to compare inexact psgla and psgla
+#         The inexact prox computes the prox by iteratively solving the dual
+#         problem using gradient descent.
+#         The dual problem is given by
+#         - min_v {(gamma*v - x)^2/(2*gamma) - x^2/(2*gamma) + (alpha-1)*(log((alpha-1)/(beta-v)) - 1)}
+#             =: - min_v Psi_gamma(v)
+#         Once the dual solution v is approximated, the approximation to the 
+#         prox evaluation is   x - gamma*v
+#         Check the accuracy by bounding the duality gap Phi(y)+Psi(v)
+#         """
+#         checkAccuracy = True if epsilon is not None else False
+#         # iterative scheme to minimize the dual objective
+#         v = np.zeros_like(x)    # function is only defined on [-Inf, beta], beta > 0, hence initilizing at 0 might be safe
+#         stopcrit = np.full(x.shape, False)
+#         tau = 1/(gamma + (self.alpha-1)/(self.beta**2)) # since optimal v < 0 and initialize at 0, this is lower bound for 1/L
+#         i = 0
+#         while i < maxiter and not np.all(stopcrit):
+#             i = i + 1
+#             # update v
+#             v[~stopcrit] = v[~stopcrit] - tau * (gamma*v[~stopcrit] - x[~stopcrit] + (1-self.alpha)/(v[~stopcrit]-self.beta))
+#             if checkAccuracy:
+#                 # compute primal dual gap here and check if smaller than epsilon
+#                 P = self(x-gamma*v) + gamma/2 * v**2  # primal value
+#                 Pconj = ((gamma*v-x)**2)/(2*gamma) - (x**2)/(2*gamma) + (self.alpha-1)*(np.log((self.alpha-1)/(self.beta-v)) - 1)
+#                 stopcrit = P + Pconj < epsilon
+#         return x - gamma*v
         
 
-class MY_Log_Gamma1D():
-    """
-    negative Log-density of a 1D Gamma distribution with parameters
-    - shape: alpha > 0
-    - rate: beta > 0
-    Only need this class to check whether the MYULA implementation works and 
-    converges to its (biased) target.
-    """
-    def __init__(self, alpha = 1, beta = 0.5, gamma = 1):
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
-        self.unsmoothed_pot = Log_Gamma1D(alpha, beta)
+# class MY_Log_Gamma1D():
+#     """
+#     negative Log-density of a 1D Gamma distribution with parameters
+#     - shape: alpha > 0
+#     - rate: beta > 0
+#     Only need this class to check whether the MYULA implementation works and 
+#     converges to its (biased) target.
+#     """
+#     def __init__(self, alpha = 1, beta = 0.5, gamma = 1):
+#         self.alpha = alpha
+#         self.beta = beta
+#         self.gamma = gamma
+#         self.unsmoothed_pot = Log_Gamma1D(alpha, beta)
     
-    def __call__(self, x):
-        prox_vals = self.unsmoothed_pot.prox(x, self.gamma)
-        return self.unsmoothed_pot(prox_vals) + 1/(2*self.gamma)*np.sum((x-prox_vals)**2, axis=0)
+#     def __call__(self, x):
+#         prox_vals = self.unsmoothed_pot.prox(x, self.gamma)
+#         return self.unsmoothed_pot(prox_vals) + 1/(2*self.gamma)*np.sum((x-prox_vals)**2, axis=0)
     
-    def prox(self, x, gamma = 1):
-        raise NotImplementedError("Please don't try to compute the prox of an already MY-regularized function")
+#     def prox(self, x, gamma = 1):
+#         raise NotImplementedError("Please don't try to compute the prox of an already MY-regularized function")
         
-class MY_L1loss_scaled():
-    """
-    Moreau-Yosida regularization of L1-loss with parameter gamma 
-    This equals the Huber loss. Only need this class to check whether the 
-    MYULA implementation works and converges to its (biased) target
-    """
-    def __init__(self, gamma = 1, d=None, mu = None, b = None):
-        if d is None and mu is None:
-            raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
-        self.d = d if d is not None else mu.shape[0]
-        self.mu = mu if mu is not None else np.zeros((self.d,1))
-        self.b = b if b is not None else 1
-        self.gamma = gamma
-        self.unsmoothed_pot = L1loss_scaled(d=self.d,mu=self.mu,b=self.b)
+# class MY_L1loss_scaled():
+#     """
+#     Moreau-Yosida regularization of L1-loss with parameter gamma 
+#     This equals the Huber loss. Only need this class to check whether the 
+#     MYULA implementation works and converges to its (biased) target
+#     """
+#     def __init__(self, gamma = 1, d=None, mu = None, b = None):
+#         if d is None and mu is None:
+#             raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
+#         self.d = d if d is not None else mu.shape[0]
+#         self.mu = mu if mu is not None else np.zeros((self.d,1))
+#         self.b = b if b is not None else 1
+#         self.gamma = gamma
+#         self.unsmoothed_pot = L1loss_scaled(d=self.d,mu=self.mu,b=self.b)
     
-    def __call__(self, x):
-        prox_vals = self.unsmoothed_pot.prox(x, self.gamma)
-        return self.unsmoothed_pot(prox_vals) + 1/(2*self.gamma)*np.sum((x-prox_vals)**2, axis=0)
-        #return np.sum(
-        #    (np.abs(x-self.mu) > self.gamma/self.b)*(np.abs(x-self.mu) - self.gamma/(2*self.b))
-        #        + (np.abs(x-self.mu) <= self.gamma/self.b)*(self.b/(2*self.gamma) * (x-self.mu)**2)
-        #    ,axis=0)
+#     def __call__(self, x):
+#         prox_vals = self.unsmoothed_pot.prox(x, self.gamma)
+#         return self.unsmoothed_pot(prox_vals) + 1/(2*self.gamma)*np.sum((x-prox_vals)**2, axis=0)
+#         #return np.sum(
+#         #    (np.abs(x-self.mu) > self.gamma/self.b)*(np.abs(x-self.mu) - self.gamma/(2*self.b))
+#         #        + (np.abs(x-self.mu) <= self.gamma/self.b)*(self.b/(2*self.gamma) * (x-self.mu)**2)
+#         #    ,axis=0)
     
-    def grad(self, x):
-        return ( (np.abs(x-self.mu) > self.gamma/self.b)*np.sign(x-self.mu)
-                + (np.abs(x-self.mu) <= self.gamma/self.b)*self.b/self.gamma * (x-self.mu) )
+#     def grad(self, x):
+#         return ( (np.abs(x-self.mu) > self.gamma/self.b)*np.sign(x-self.mu)
+#                 + (np.abs(x-self.mu) <= self.gamma/self.b)*self.b/self.gamma * (x-self.mu) )
     
-    def prox(self, x, gamma = 1):
-        raise NotImplementedError("Please don't try to compute the prox of an already MY-regularized function")
+#     def prox(self, x, gamma = 1):
+#         raise NotImplementedError("Please don't try to compute the prox of an already MY-regularized function")

@@ -24,7 +24,7 @@ from inexact_pla import inexact_pla
 
 #%% parameters
 params = {
-    'iterations': 25,
+    'iterations': 100,
     'num_chains': 1,
     'testfile_path' : 'test_images/cameraman.tif',     # relative path to test image
     'num_cores' : 1,
@@ -95,8 +95,8 @@ def main():
     L = max_ev/noise_std**2
    
     """ determine optimal theta using SAPG """
-    iter_outer = 50
-    iter_burnin = 20
+    iter_outer = 20
+    iter_burnin = 10
     theta0 = 0.01
     # empirically, for blur b=10 we need ~800 warm up iterations with tau = 0.9/L. 
     # for blur=5 roughly 400 warm up iterations
@@ -127,9 +127,9 @@ def main():
     plt.colorbar()
     plt.show()
     
-    z,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e1, verbose=True)
+    z,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e3, verbose=False)
     plt.imshow(z,cmap='Greys_r',vmin=0,vmax=255)
-    plt.title('Denoised image')
+    plt.title('Denoised image (MAP)')
     plt.colorbar()
     plt.show()
     
@@ -153,7 +153,7 @@ def main():
     
     """ iPLA sampling """
     posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
-    for epsilon_prox in 10**np.arange(-3,2,1.0):
+    for epsilon_prox in 10**np.arange(3,7,1.0):
         x0 = s.x # use last SAPG iterate as initializer, alternatively run separate warm-up
         n_iter = params['iterations']
         tau = 0.9/L
@@ -165,9 +165,9 @@ def main():
         mmse_samples = np.mean(ipla.x,axis=2)
         std_samples = np.std(ipla.x,axis=2)
         
-        plt.imshow(mmse_samples, cmap='Greys_r')
+        plt.imshow(mmse_samples, cmap='Greys_r',vmin=0,vmax=255)
         plt.colorbar()
-        plt.title('Sample mean')
+        plt.title('MMSE')
         plt.show()
         
         # plt.imshow(std_samples, cmap='Greys_r')
@@ -178,8 +178,8 @@ def main():
         result_path = 'results/{}/blur{}/snr{}/logeps{}'.format(params['testfile_path'].split('/')[1][:-4],blur_width,noise_snr,int(np.log10(epsilon_prox)))
         Path(result_path).mkdir(exist_ok=True,parents=True)
         mmse_samples = np.maximum(np.minimum(mmse_samples,255),0)
-        # iio.imwrite(result_path+'/mmse.png',mmse_samples.astype('uint8'))
-        # iio.imwrite(result_path+'/std.png',std_samples.astype('uint8'))
+        iio.imwrite(result_path+'/mmse.png',mmse_samples.astype('uint8'))
+        iio.imwrite(result_path+'/std.png',std_samples.astype('uint8'))
         print('Finished run with epsilon = 10^{}. Total number of agd steps to compute proximal points: {}'.format(int(np.log10(epsilon_prox)),ipla.num_prox_iterations_total))
     
     
