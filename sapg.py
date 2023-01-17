@@ -21,7 +21,7 @@ class sapg():
     SAPG is an empirical Bayesian strategy to choose the parameter mu by 
     computing the marginal MLE of the parameter.
     
-    Important: Some of the classes in potentials.py  like l1loss or TV
+    Important: Some of the classes in potentials.py like l1loss or TV
     allow a scaling by a parameter 'scale' (which is implicitly the 
     regularization parameter mu), because we need this for the later 
     sampling algorithms.
@@ -61,14 +61,15 @@ class sapg():
         self.eta = np.zeros((iter_outer+1,))
         self.eta[0], self.eta_min, self.eta_max = np.log(theta0), np.log(theta_min), np.log(theta_max)
         self.eps_prox = epsilon_prox
-        self.d = x0.shape[0]
         self.x0 = np.copy(x0)
         self.x = np.copy(x0)
+        self.x_shape = self.x.shape
+        self.d = np.prod(self.x_shape)
         self.pd = pd
-        self.f = self.pd.f
-        self.df = self.f.grad
+        self.f = pd.f
+        self.df = pd.f.grad
         self.dfx = self.df(self.x)
-        self.g = self.pd.g
+        self.g = pd.g
         self.mean_g = np.zeros((iter_outer+1,))
         self.mean_g[0] = self.g(x0)
         try:
@@ -91,12 +92,14 @@ class sapg():
             self.outer()
             if verbose:
                 sys.stdout.write('\b'*4+'{:3d}%'.format(int(self.i_out/self.iter_outer*100)))
+        if verbose:
+            print('\nFinal estimate of regularization parameter: {:.4f}\n'.format(self.mean_theta[-1]))
     
     def warmup(self, verbose):
         self.logpi_wu = np.zeros((self.iter_wu,))
         while self.i_wu < self.iter_wu:
             self.i_wu += 1
-            xi = self.rng.normal(loc=0, scale=1, size=(self.d,1))
+            xi = self.rng.normal(loc=0, scale=1, size=self.x_shape)
             y = self.x - self.tau * self.dfx + np.sqrt(2*self.tau) * xi
             if self.prox_is_exact:
                 self.x = self.prox_g(y, gamma=self.tau*self.theta[0])
@@ -125,7 +128,7 @@ class sapg():
             
     def inner(self):
         self.i_in += 1
-        xi = self.rng.normal(loc=0, scale=1, size=(self.d,1))
+        xi = self.rng.normal(loc=0, scale=1, size=self.x_shape)
         y = self.x - self.tau * self.dfx + np.sqrt(2*self.tau) * xi
         if self.prox_is_exact:
             self.x = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1])

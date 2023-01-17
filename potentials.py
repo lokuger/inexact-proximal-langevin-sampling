@@ -248,60 +248,26 @@ class total_variation():
         dx_u, dy_u = self._imgradient(u)
         return self.scale*np.sum(np.sqrt(dx_u**2 + dy_u**2))
     
-    def _inexact_prox_singleImage_vanillaGD(self, u, gamma=1, epsilon=None, maxiter=1e3, verbose=False):
+    def inexact_prox(self, u, gamma=1, epsilon=None, maxiter=np.Inf, verbose=False):
         """
         Computing the prox of TV is solving the ROF model. See Chambolle, Pock 2016,
-        Example 4.8 for a precise description of what is done here
+        Example 4.8 for a precise description of what is done here. We are 
+        using accelerated proximal gradient descent on the dual ROF problem.
         -- gamma is the prox parameter, hence if the TV scaling parameter mu is 
         set to a value other than 1, solving this problem is equivalent to 
         computing a backward gradient step (=solving ROF) with step
             gamma * mu
+            
+        inexact_prox(self, u, gamma=1, epsilon=None, maxiter=np.Inf, verbose=False)
+        parameters:
+            - u:        image to be denoised, shape self.n1, self.n2
+            - gamma:    prox step size
+            - epsilon:  accuracy for duality gap stopping criterion
+            - maxiter:  maximum number of iterations
+            - verbose:  verbosity
         """
-        checkAccuracy = True if epsilon is not None else False
-        # iterative scheme to minimize the dual objective
-        px = np.zeros((self.n1,self.n2))  # solve for solution of the dual p using proximal gradient descent
-        py = np.zeros((self.n1,self.n2))
-        d_adjoint_p = self._imdivergence(px, py)
-        stopcrit = False
-        tauprime = 0.99 * 1/8
-        tau = 1
-        i = 0
-        if checkAccuracy and verbose:
-            print('Run (backward) gradient descent on the dual ROF problem with gamma*mu = {:.3e}'.format(gamma*self.scale))
-            print('|{:^11s}|{:^31s}|'.format('Iterate','D-Gap (stop if < {:.3e})'.format(epsilon)))
-        while i < maxiter and not stopcrit:
-            i = i + 1
-            # gradient of Moreau-Yosida regularization
-            zx,zy = self._imgradient(d_adjoint_p - u)
-            vx = px - tauprime * zx
-            vy = py - tauprime * zy
-            # project 
-            s = 1/np.maximum(1,1/(gamma*self.scale) * np.sqrt(vx**2 + vy**2))
-            wx, wy = vx*s, vy*s     # projection in dual norm
-            # explicit gradient descent step on the Moreau-Yosida regularization: Gradient is p-w, see Chambolle, Pock 2016
-            px = px - tau*(px - wx)
-            py = py - tau*(py - wy)
-            Dadjp = self._imdivergence(px, py)
-            if checkAccuracy:
-                h = 1/2 * np.sum(d_adjoint_p**2)
-                # stopping criterion: primal dual gap here less than epsilon.
-                P = gamma * self(u-Dadjp) + h # primal value
-                ndual = np.sqrt(px**2+py**2)
-                dualInadmissible = np.any(ndual > gamma*self.scale+1e-15)
-                Pconj = np.Inf if dualInadmissible else h - np.sum(d_adjoint_p * u)
-                dgap = P+Pconj
-                stopcrit = dgap < epsilon
-                if dgap < 0: # debugging purpose
-                    raise ValueError('Duality gap was negative, please check the prox computation routine!')
-                if verbose and (i%10 == 0 or stopcrit):
-                    print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
-                
-        return u - self._imdivergence(px, py)
-    
-    def _inexact_prox_singleImage_acceleratedGD(self, u, gamma=1, epsilon=None, maxiter=1e3, verbose=False):
-        """
-        Same as "_vanillaGD but using accelerated GD, see Chambolle & Pock 2016
-        """
+        if epsilon is None and maxiter is np.Inf:
+            raise ValueError('provide either an accuracy or a maximum number of iterations to the tv prox please')
         checkAccuracy = True if epsilon is not None else False
         # iterative scheme to minimize the dual objective
         px = np.zeros((self.n1,self.n2))  # solve for solution of the dual p using proximal accelerated gradient descent
@@ -319,53 +285,37 @@ class total_variation():
             print('|{:^11s}|{:^31s}|'.format('Iterate','D-Gap (stop if < {:.3e})'.format(epsilon)))
         while i < maxiter and not stopcrit:
             i = i + 1
-            
             t_agd_new = (1+np.sqrt(1+4*t_agd**2))/2
             qx = px_curr + (t_agd-1)/t_agd_new * (px_curr - px_prev)
             qy = py_curr + (t_agd-1)/t_agd_new * (py_curr - py_prev)
             
             # compute the gradient of Moreau-Yosida regularization at qx,qy
             zx,zy = self._imgradient(self._imdivergence(qx, qy) - u)
-            vx = qx - tauprime * zx
-            vy = qy - tauprime * zy
+            vx,vy = qx-tauprime*zx, qy-tauprime*zy
             s = 1/np.maximum(1,1/(gamma*self.scale) * np.sqrt(vx**2 + vy**2))
             wx, wy = vx*s, vy*s     # projection in dual norm
             # The gradient is q-w, see Chambolle, Pock 2016
             
             # updates
             t_agd = t_agd_new
-            px_prev = np.copy(px_curr)
-            py_prev = np.copy(py_curr)
-            px_curr = qx - tau_agd * (qx - wx)
-            py_curr = qy - tau_agd * (qy - wy)
+            px_prev, py_prev = np.copy(px_curr), np.copy(py_curr)
+            px_curr, py_curr = qx-tau_agd*(qx-wx), qy-tau_agd*(qy-wy)
             
-            # stopping criterion
+            # stopping criterion: check if primal-dual gap < epsilon
             if checkAccuracy:
                 d_adjoint_p = self._imdivergence(px_curr, py_curr)
                 h = 1/2 * np.sum(d_adjoint_p**2)
-                # compute primal dual gap here and check if smaller than epsilon
-                P = gamma * self(u-d_adjoint_p) + h # primal value
-                ndual = np.sqrt(px_curr**2 + py_curr**2)
-                dualInadmissible = np.any(ndual > gamma*self.scale+1e-12)
-                Pconj = np.Inf if dualInadmissible else h - np.sum(d_adjoint_p * u)
-                dgap = P+Pconj
+                primal = gamma * self(u-d_adjoint_p) + h
+                norm_dual_iterate = np.sqrt(px_curr**2 + py_curr**2)
+                dual_inadmissible = np.any(norm_dual_iterate > gamma*self.scale+1e-12)
+                dual = -np.Inf if dual_inadmissible else - h + np.sum(d_adjoint_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
+                dgap = primal-dual
                 stopcrit = dgap < epsilon
-                if dgap < 0:
-                    raise ValueError('Bad, Bad, Bad! Duality gap was negative, please check your prox computation routine!')
+                if dgap < 0: # for debugging purpose
+                    raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose and (i%10 == 0 or stopcrit or i==maxiter):
                     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
-                
         return u - self._imdivergence(px_curr, py_curr)
-    
-    def inexact_prox(self, u, gamma=1, epsilon=None, maxiter=1e3, verbose=False, gd_type='accelerated'):
-        """
-        Computes the proximal mapping of TV, i.e., solves the ROF problem
-            argmin_v {TV(v) + 1/(2*gamma)|||v-u||_2^2}
-        """
-        if gd_type == 'accelerated':
-            return self._inexact_prox_singleImage_acceleratedGD(u, gamma, epsilon, maxiter, verbose)
-        elif gd_type == 'vanilla':
-            return self._inexact_prox_singleImage_vanillaGD(u, gamma, epsilon, maxiter, verbose)
     
     def rescale(self, scale_new):
         self.scale = self.scale_new
