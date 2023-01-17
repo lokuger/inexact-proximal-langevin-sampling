@@ -7,7 +7,7 @@ Created on Wed Jan 11 08:51:53 2023
 """
 
 from numpy.random import default_rng
-import imageio.v2 as iio
+import imageio as iio
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
