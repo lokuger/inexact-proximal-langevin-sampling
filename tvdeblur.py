@@ -24,9 +24,9 @@ from inexact_pla import inexact_pla
 
 #%% parameters
 params = {
-    'iterations': 100,
+    'iterations': 1000,
     'num_chains': 1,
-    'testfile_path' : 'test_images/cameraman.tif',     # relative path to test image
+    'testfile_path' : 'test_images/mandrill.png',     # relative path to test image
     'num_cores' : 1,
     'parallel': False,
     'verbose': False
@@ -153,7 +153,7 @@ def main():
     
     """ iPLA sampling """
     posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
-    for epsilon_prox in 10**np.arange(3,7,1.0):
+    for epsilon_prox in 10**np.arange(3,9,1.0):
         x0 = s.x # use last SAPG iterate as initializer, alternatively run separate warm-up
         n_iter = params['iterations']
         tau = 0.9/L
@@ -170,10 +170,10 @@ def main():
         plt.title('MMSE')
         plt.show()
         
-        # plt.imshow(std_samples, cmap='Greys_r')
-        # plt.colorbar()
-        # plt.title('Sample standard deviation')
-        # plt.show()
+        plt.imshow(std_samples, cmap='Greys_r')
+        plt.colorbar()
+        plt.title('Sample standard deviation')
+        plt.show()
         
         result_path = 'results/{}/blur{}/snr{}/logeps{}'.format(params['testfile_path'].split('/')[1][:-4],blur_width,noise_snr,int(np.log10(epsilon_prox)))
         Path(result_path).mkdir(exist_ok=True,parents=True)
