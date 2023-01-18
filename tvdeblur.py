@@ -21,12 +21,13 @@ import potentials as pot
 import distributions as pds
 from sapg import sapg
 from inexact_pla import inexact_pla
+from pxmala import pxmala
 
 #%% parameters
 params = {
-    'iterations': 1000,
+    'iterations': 10000,
     'num_chains': 1,
-    'testfile_path' : 'test_images/mandrill.png',     # relative path to test image
+    'testfile_path' : 'test_images/cameraman.tif',     # relative path to test image
     'num_cores' : 1,
     'parallel': False,
     'verbose': False
@@ -79,12 +80,12 @@ def main():
     tv_groundtruth = tv(x)
     
     """ Generate noisy observation: normally distributed/Gaussian noise model"""
-    blur_width = 0
-    # a,at,max_ev = blur(n,blur_width)                        # blur operator
-    a,at,max_ev = lambda x : x, lambda x : x, 1    # only denoising
+    blur_width = 5
+    a,at,max_ev = blur(n,blur_width)                 # blur operator
+    # a,at,max_ev = lambda x : x, lambda x : x, 1    # only denoising
     
     y = a(x)
-    noise_snr = 10 # [dB] of blurred snr
+    noise_snr = 40 # [dB] of blurred snr
     noise_std = np.std(y)*10**(-noise_snr/20)
     y = y + noise_std*rng.normal(size=(n,n))
     
@@ -95,17 +96,17 @@ def main():
     L = max_ev/noise_std**2
    
     """ determine optimal theta using SAPG """
-    iter_outer = 20
-    iter_burnin = 10
+    iter_outer = 40
+    iter_burnin = 20
     theta0 = 0.01
-    # empirically, for blur b=10 we need ~800 warm up iterations with tau = 0.9/L. 
-    # for blur=5 roughly 400 warm up iterations
+    # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
+    # for blur=5 roughly 500 warm up iterations
     # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
-    s = sapg(iter_wu=50,
+    s = sapg(iter_wu=500,
              iter_outer=iter_outer,
              iter_burnin=iter_burnin,
              iter_inner=1,
-             tau=0.1/L,
+             tau=0.9/L,
              delta=lambda k: 0.1/(theta0*n**2) * (k+1)**(-0.8),
              x0=y,
              theta0=theta0,
@@ -114,27 +115,27 @@ def main():
              epsilon_prox=3e-2,
              pd=unscaled_posterior)
     s.simulate()
-    # the computed optimal regularization parameter
+    # the final estimate for the optimal regularization parameter
     mu_tv = s.mean_theta[-1]
     
-    plt.imshow(x,cmap='Greys_r',vmin=0,vmax=255)
-    plt.title('True image')
-    plt.colorbar()
-    plt.show()
+    # plt.imshow(x,cmap='Greys_r',vmin=0,vmax=255)
+    # plt.title('True image')
+    # plt.colorbar()
+    # plt.show()
     
-    plt.imshow(y,cmap='Greys_r',vmin=0,vmax=255)
-    plt.title('Blurred & noisy image')
-    plt.colorbar()
-    plt.show()
+    # plt.imshow(y,cmap='Greys_r',vmin=0,vmax=255)
+    # plt.title('Blurred & noisy image')
+    # plt.colorbar()
+    # plt.show()
     
-    z,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e3, verbose=False)
-    plt.imshow(z,cmap='Greys_r',vmin=0,vmax=255)
-    plt.title('Denoised image (MAP)')
-    plt.colorbar()
-    plt.show()
+    # # z,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e3, verbose=False)
+    # # plt.imshow(z,cmap='Greys_r',vmin=0,vmax=255)
+    # # plt.title('Denoised image (MAP)')
+    # # plt.colorbar()
+    # # plt.show()
     
     # """ -- plots to check that SAPG converged -- """
-    # plt.plot(s.logpi_wu, label='log-likelihood warm-up samples')
+    # plt.plot(s.logpi_wu[100:], label='log-likelihood warm-up samples')
     # plt.legend()
     # plt.show()
     
@@ -153,7 +154,7 @@ def main():
     
     """ iPLA sampling """
     posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
-    for epsilon_prox in 10**np.arange(3,9,1.0):
+    for epsilon_prox in 10**np.arange(-6,-1,2.0):
         x0 = s.x # use last SAPG iterate as initializer, alternatively run separate warm-up
         n_iter = params['iterations']
         tau = 0.9/L
@@ -181,6 +182,16 @@ def main():
         iio.imwrite(result_path+'/mmse.png',mmse_samples.astype('uint8'))
         iio.imwrite(result_path+'/std.png',std_samples.astype('uint8'))
         print('Finished run with epsilon = 10^{}. Total number of agd steps to compute proximal points: {}'.format(int(np.log10(epsilon_prox)),ipla.num_prox_iterations_total))
+    
+    """ Px-MALA sampling for unbiased estimates """
+    # posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
+    # n_iter_pxmala = params['iterations']
+    # tau = 0.75 # adaptive step size for pxmala? Something doesn't work here, divergence of logpi for steps that are too small
+    # x0 = s.x
+    # pxm = pxmala(n_iter_pxmala, tau, x0, pd=posterior)
+    # pxm.simulate()
+    # # report acceptance rate
+    # print('Acceptance rate: {}'.format(pxm.accepted/n_iter_pxmala))
     
     
 def print_help():

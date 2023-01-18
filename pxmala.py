@@ -10,48 +10,41 @@ import numpy as np
 from numpy.random import default_rng
 import matplotlib.pyplot as plt
 
-class PxMALA():
-    def __init__(self, max_iter, tau, x0, pd):
+class pxmala():
+    def __init__(self, n_iter, tau, x0, pd):
         # we're computing samples in self.x with shape (d, n_samples)
         # expect input x0 to be (d, n_samples) as well
-        self.max_iter = max_iter
-        self.tau = tau
+        self.n_iter = n_iter
         self.iter = 0
-        self.T = 0
-        self.d, self.n_samples = x0.shape
+        self.tau = tau
+        self.shape_x = x0.shape
         self.x0 = np.copy(x0)
+        self.x = np.zeros((self.shape_x[0],self.shape_x[1],self.n_iter+1))
+        self.x[:,:,0] = self.x0
         
         self.pd = pd
-        self.F = pd.F
-        self.dF = self.F.grad
+        self.f = pd.f
+        self.df = self.f.grad
         try:
             self.targetpdf = pd.pdf
         except AttributeError:
             self.targetpdf = pd.unscaled_pdf
         try:
-            self.proxExact = True
-            self.proxG = pd.G.prox
+            self.prox_is_exact = True
+            self.prox_g = pd.g.prox
         except AttributeError:
-            self.proxExact = False
-            self.proxG = pd.G.inexact_prox
+            self.prox_is_exact = False
+            self.prox_g = pd.g.inexact_prox
         self.rng = default_rng()
         
         # iterates
-        self.x = np.copy(x0)
-        self.dFx = self.dF(self.x)
-        self.proxVal = self.proxApprox(self.x,self.dFx)
+        self.dfx = self.df(self.x[:,:,0])
+        self.prox_vals = self.prox(self.x[:,:,0],self.dfx)
     
-    def simulate(self, return_all = True):
+    def simulate(self):
         self.accepted = 0
-        if return_all:
-            x_all = np.zeros((self.d, self.n_samples, self.max_iter+1))
-            x_all[:,:,0] = self.x0
-        while self.iter < self.max_iter:
+        while self.iter < self.n_iter:
             self.update()
-            if return_all:
-                x_all[:,:,self.iter] = self.x
-        x_return = x_all if return_all else self.x
-        return x_return, self.accepted/(self.max_iter*self.n_samples)
     
     def update(self):
         """
@@ -76,35 +69,36 @@ class PxMALA():
             since x_prop will be the new iterates x_{k+1}, this saves computations
         """
         self.iter = self.iter + 1
-        xi = self.rng.normal(loc=0, scale=1, size=(self.d, self.n_samples))
-        x_proposal = self.proxVal + np.sqrt(2*self.tau) * xi
-        dFx_proposal = self.dF(x_proposal)
-        proxVals_proposal = self.proxApprox(x_proposal, dFx_proposal)
-        s1 = - np.sum((self.x-proxVals_proposal)**2,axis=0)/(4*self.tau)
-        s2 = + np.sum((x_proposal-self.proxVal)**2, axis=0)/(4*self.tau)
-        s3 = - np.reshape(self.pd.F(x_proposal) + self.pd.G(x_proposal),(-1,))
-        s4 = + np.reshape(self.pd.F(self.x) + self.pd.G(self.x),(-1,))
+        xi = self.rng.normal(size = self.shape_x)
+        x_proposal = self.prox_vals + np.sqrt(2*self.tau) * xi
+        dfx_proposal = self.df(x_proposal)
+        prox_vals_proposal = self.prox(x_proposal, dfx_proposal)
+        s1 = - np.sum((self.x[:,:,self.iter-1]-prox_vals_proposal)**2)/(4*self.tau)
+        s2 = + np.sum((x_proposal-self.prox_vals)**2)/(4*self.tau)
+        s3 = - self.pd.f(x_proposal) + self.pd.g(x_proposal)
+        s4 = + self.pd.f(self.x[:,:,self.iter-1]) + self.pd.g(self.x[:,:,self.iter-1])
         s = s1+s2+s3+s4
         q = np.exp(s)
-        p = np.minimum(1,q)
-        p[q==float('inf')] = 1  # if the sum in exp was very large then p should be 1
+        p = 1 if q == float('inf') else np.minimum(1,q)
         
-        #p = np.ones((1,self.n_samples))
         r = self.rng.binomial(1, p)
-        I = r==1
-        self.accepted += np.sum(I)
-        self.x[:,I] = x_proposal[:,I]
-        self.proxVal[:,I] = proxVals_proposal[:,I]
-        self.dFx[:,I] = dFx_proposal[:,I]
-        #self.x = x_proposal
-        #self.proxVal = proxVals_proposal
-        #self.dFx = dFx_proposal
-        
-    def proxApprox(self,u,dFu):
-        w = u - self.tau * dFu
-        if self.proxExact:
-            y = self.proxG(w, gamma=self.tau)
+        if r==1:
+            self.accepted += 1
+            self.x[:,:,self.iter] = x_proposal
+            self.prox_vals = prox_vals_proposal
+            self.dfx = dfx_proposal
         else:
-            y = self.proxG(w, gamma=self.tau, epsilon=None, maxiter=1e3, verbose=False)
+            self.x[:,:,self.iter] = self.x[:,:,self.iter-1]
+        
+    def prox(self,u,dfu):
+        w = u - self.tau * dfu
+        if self.prox_is_exact:
+            y = self.prox_g(w, gamma=self.tau)
+        else:
+            # is there some easy way to estimate duality gap bound epsilon here? Maybe duality gap at first iteration?
+            y, _ = self.prox_g(w, gamma=self.tau, epsilon=None, maxiter=1e2, verbose=False)
         return y
+    
+    
+    
                 

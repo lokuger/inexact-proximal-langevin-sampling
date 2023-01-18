@@ -20,7 +20,7 @@ class inexact_pla():
         self.shape_x = x0.shape
         self.x0 = np.copy(x0)
         self.x = np.zeros((self.shape_x[0],self.shape_x[1],n_iter+1))
-        self.x[:,:,0] = x0
+        self.x[:,:,0] = self.x0
         self.f = pd.f
         self.df = pd.f.grad
         self.dfx = self.df(self.x[:,:,0])
