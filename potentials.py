@@ -1,41 +1,39 @@
 import numpy as np
 import warnings
+import sys
     
-# class l2_loss_homoschedastic():
-#     """
-#     a simplified form of the l2_loss_heteroschedastic class that is faster for 
-#     the (very common) special case that the variance matrix is sigma^2*I
+class l2_loss_homoschedastic():
+    """
+    a simplified form of the l2_loss_heteroschedastic class that is faster for 
+    the (very common) special case that the variance matrix is sigma^2*I
     
-#     F(x) = 1/(2*sigma^2) * ||x - y||_2^2
+    F(x) = 1/(2*sigma^2) * ||x - y||_2^2
     
-#     __init__ input parameters:
-#         - d:        dimension of x, can be inferred from mu if mu is given
-#         - y:        shift parameter/data, e.g. noisy image in denoising
-#         - sigma2:   noise variance of noise
+    __init__ input parameters:
+        - y:        right hand side data
+        - sigma2:   variance of Gaussian noise
     
-#     __call__ input parameter:
-#         - x:        image of shape self.im_shape
-#     """
-#     def __init__(self, im_shape, y=None, sigma2=1):
-#         self.im_shape = self.im_shape
-#         self.d = np.prod(im_shape)
-#         self.y = y if y is not None else np.zeros(im_shape)
-#         self.sigma2=1
+    __call__ input parameter:
+        - x:        image of shape self.im_shape
+    """
+    def __init__(self, y, sigma2):
+        self.y = y
+        self.sigma2 = sigma2
     
-#     def __call__(self, x):
-#         return 1/(2*self.sigma2) * np.sum((x-self.y)**2)
+    def __call__(self, x):
+        return 1/(2*self.sigma2) * np.sum((x-self.y)**2)
     
-#     def grad(self, x):
-#         return 1/self.sigma2 * (x-self.y)
+    def grad(self, x):
+        return 1/self.sigma2 * (x-self.y)
     
-#     def prox(self, x, gamma = 1):
-#         return 1/(self.sigma2+gamma)*(self.sigma2*x+gamma*self.y)
+    def prox(self, x, gamma):
+        return 1/(self.sigma2+gamma)*(self.sigma2*x+gamma*self.y)
     
-#     def conj(self, x):
-#         return self.sigma2/2 * np.sum(x**2, axis=0) + np.sum(x * self.y, axis=0)
+    def conj(self, x):
+        return self.sigma2/2 * np.sum(x**2) + np.sum(x * self.y)
     
-#     def conjProx(self, x, gamma = 1):
-#         return 1/(1+gamma*self.sigma2)*(x-gamma*self.y)
+    def conj_prox(self, x, gamma = 1):
+        return 1/(1+gamma*self.sigma2)*(x-gamma*self.y)
     
 class l2_loss_reconstruction_homoschedastic():
     """
@@ -46,18 +44,15 @@ class l2_loss_reconstruction_homoschedastic():
     
     F(x) = 1/(2*sigma^2) * ||Ax - y||_2^2
     
-    Inputs: 
-        - d:        dimension of u, can be inferred from mu or K if they are given
+    Inputs:
+        - im_shape: shape of x
         - y:        right hand side data
-        - sigma:    standard deviation of Gaussian noise
+        - sigma2:   variance of Gaussian noise
         - a, at:    forward operator A and its transpose. Given as callable a(x), at(y)
     """
-    def __init__(self, im_shape, y=None, sigma2=1, a=None, at=None):
-        self.im_shape = im_shape
-        self.d = np.prod(im_shape)
+    def __init__(self, y, sigma2, a, at):
         self.y = y
         self.sigma2 = sigma2
-        
         self.a = a
         self.at = at
     
@@ -70,6 +65,32 @@ class l2_loss_reconstruction_homoschedastic():
     def grad(self, x):
         return 1/self.sigma2 * self.at(self.a(x)-self.y)
 
+class l1_loss_homoschedastic():
+    """
+    An l1 loss term corresponding to the likelihood of 
+    
+    F(x) = 1/b * ||x - y||_1
+    
+    Inputs: 
+        - y:        data
+        - b:        scale parameter. 
+    The correspnding Laplace distribution Laplace(y,b) has variance 2*b^2
+    """
+    def __init__(self, y, b):
+        self.y = y
+        self.b = b
+    
+    def __call__(self, x):
+        """
+        Accepts only inputs of shape self.y.shape
+        """
+        return 1/self.b * np.sum(np.abs(x-self.y))
+    
+    def grad(self, x):
+        raise NotImplementedError('L1 norm has no gradient')
+        
+    def prox(self, x, tau):
+        return self.y + np.maximum(0, np.abs(x-self.y)-tau/self.b)*np.sign(x-self.y)
 
 # class L1loss_scaled():
 #     """
@@ -195,7 +216,7 @@ class total_variation():
         self.n2 = n2
         self.scale = scale
         
-    def _imgradient(self, u):
+    def _imgrad(self, u):
         """
         applies a 2D image gradient to the image u of shape (n1,n2)
         
@@ -209,28 +230,25 @@ class total_variation():
         (px,py) image gradients in x- and y-directions.
 
         """
-        px = np.concatenate((u[1:,:] - u[0:-1,:], np.zeros((1,self.n2))),axis=0)
-        py = np.concatenate((u[:,1:] - u[:,0:-1], np.zeros((self.n1,1))),axis=1)
-        return px, py
+        px = np.concatenate((u[1:,:]-u[0:-1,:], np.zeros((1,self.n2))),axis=0)
+        py = np.concatenate((u[:,1:]-u[:,0:-1], np.zeros((self.n1,1))),axis=1)
+        return np.concatenate((px[np.newaxis,:,:],py[np.newaxis,:,:]), axis=0)
     
-    def _imdivergence(self, px, py):
+    def _imdiv(self, p):
         """
         Computes the negative divergence of the 2D vector field px,py.
-        could als be seen as a tensor from R^(mxnx2) to R^(mxn) (for each input)
+        can also be seen as a tensor from R^(n1xn2x2) to R^(n1xn2)
 
         Parameters
         ----------
-        px : numpy array of shape n1, n2
-            x-component of vector field.
-        py : numpy array of shape n1, n2
-            y-component of vector field.
+            - p : 2 x n1 x n2 np.array
 
         Returns
         -------
-        divergence of shape n1, n2
+            - divergence, n1 x n2 np.array
         """
-        u1 = np.concatenate((-px[0,:][np.newaxis,:], -(px[1:-1,:]-px[0:-2,:]), px[-2,:][np.newaxis,:]), axis = 0)
-        u2 = np.concatenate((-py[:,0][:,np.newaxis], -(py[:,1:-1]-py[:,0:-2]), py[:,-2][:,np.newaxis]), axis = 1)
+        u1 = np.concatenate((-p[0,0:1,:], -(p[0,1:-1,:]-p[0,0:-2,:]), p[0,-2:-1,:]), axis = 0)
+        u2 = np.concatenate((-p[1,:,0:1], -(p[1,:,1:-1]-p[1,:,0:-2]), p[1,:,-2:-1]), axis = 1)
         return u1+u2
     
     def __call__(self, u):
@@ -245,10 +263,9 @@ class total_variation():
         -------
         TV(u) (scalar)
         """
-        dx_u, dy_u = self._imgradient(u)
-        return self.scale*np.sum(np.sqrt(dx_u**2 + dy_u**2))
+        return self.scale * np.sum(np.sqrt(np.sum(self._imgrad(u)**2,axis=0)))
     
-    def inexact_prox(self, u, gamma=1, epsilon=None, maxiter=np.Inf, verbose=False):
+    def inexact_prox(self, u, gamma, epsilon=None, max_iter=np.Inf, verbose=False):
         """
         Computing the prox of TV is solving the ROF model. See Chambolle, Pock 2016,
         Example 4.8 for a precise description of what is done here. We are 
@@ -266,60 +283,85 @@ class total_variation():
             - maxiter:  maximum number of iterations
             - verbose:  verbosity
         """
-        if epsilon is None and maxiter is np.Inf:
+        if epsilon is None and max_iter is np.Inf:
             raise ValueError('provide either an accuracy or a maximum number of iterations to the tv prox please')
         checkAccuracy = True if epsilon is not None else False
         # iterative scheme to minimize the dual objective
-        px = np.zeros((self.n1,self.n2))  # solve for solution of the dual p using proximal accelerated gradient descent
-        py = np.zeros((self.n1,self.n2))
+        p = np.zeros((2,self.n1,self.n2))
         stopcrit = False
         tauprime = 0.99 * 1/8
         # tau_gd = 1
         i = 0
         tau_agd = 1
         t_agd = 0
-        px_curr, px_prev, py_curr, py_prev = np.copy(px), np.copy(px), np.copy(py), np.copy(py)
-        qx, qy = np.copy(px), np.copy(py)
-        if checkAccuracy and verbose:
-            print('Run (backward) accelerated gradient descent on the dual ROF problem with gamma = {:.3e}'.format(gamma*self.scale))
-            print('|{:^11s}|{:^31s}|'.format('Iterate','D-Gap (stop if < {:.3e})'.format(epsilon)))
-        while i < maxiter and not stopcrit:
+        p_prev = np.copy(p)
+        if verbose: sys.stdout.write('run AGD on dual ROF model: {:3d}% '.format(0)); sys.stdout.flush()
+        # if checkAccuracy and verbose:
+        #     print('Run (backward) accelerated gradient descent on the dual ROF problem with gamma = {:.3e}'.format(gamma*self.scale))
+        #     print('|{:^11s}|{:^31s}|'.format('Iterate','D-Gap (stop if < {:.3e})'.format(epsilon)))
+        while i < max_iter and not stopcrit:
             i = i + 1
             t_agd_new = (1+np.sqrt(1+4*t_agd**2))/2
-            qx = px_curr + (t_agd-1)/t_agd_new * (px_curr - px_prev)
-            qy = py_curr + (t_agd-1)/t_agd_new * (py_curr - py_prev)
+            q = p + (t_agd-1)/t_agd_new * (p - p_prev)
             
-            # compute the gradient of Moreau-Yosida regularization at qx,qy
-            zx,zy = self._imgradient(self._imdivergence(qx, qy) - u)
-            vx,vy = qx-tauprime*zx, qy-tauprime*zy
-            s = 1/np.maximum(1,1/(gamma*self.scale) * np.sqrt(vx**2 + vy**2))
-            wx, wy = vx*s, vy*s     # projection in dual norm
+            # compute the gradient of Moreau-Yosida regularization at q
+            v = q - tauprime*self._imgrad(self._imdiv(q) - u)
+            s = 1/np.maximum(1, np.sqrt(np.sum(v**2,axis=0))/(gamma*self.scale))[np.newaxis,:,:]
+            w = v * s     # projection in dual norm
             # The gradient is q-w, see Chambolle, Pock 2016
             
             # updates
             t_agd = t_agd_new
-            px_prev, py_prev = np.copy(px_curr), np.copy(py_curr)
-            px_curr, py_curr = qx-tau_agd*(qx-wx), qy-tau_agd*(qy-wy)
+            p_prev = np.copy(p)
+            p = (1-tau_agd)*q + tau_agd*w
             
             # stopping criterion: check if primal-dual gap < epsilon
             if checkAccuracy:
-                d_adjoint_p = self._imdivergence(px_curr, py_curr)
-                h = 1/2 * np.sum(d_adjoint_p**2)
-                primal = gamma * self(u-d_adjoint_p) + h
-                norm_dual_iterate = np.sqrt(px_curr**2 + py_curr**2)
+                div_p = self._imdiv(p)
+                h = 1/2 * np.sum(div_p**2)
+                primal = gamma * self(u-div_p) + h
+                norm_dual_iterate = np.sqrt(np.sum(p**2,axis=0))
                 dual_inadmissible = np.any(norm_dual_iterate > gamma*self.scale+1e-12)
-                dual = -np.Inf if dual_inadmissible else - h + np.sum(d_adjoint_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
+                dual = -np.Inf if dual_inadmissible else - h + np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
                 dgap = primal-dual
                 stopcrit = dgap < epsilon
                 if dgap < 0: # for debugging purpose
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
-                if verbose and (i%10 == 0 or stopcrit or i==maxiter):
-                    print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
-        return (u - self._imdivergence(px_curr, py_curr)), i
-    
-    def rescale(self, scale_new):
-        self.scale = scale_new
+                if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
+                # if verbose and (i%10 == 0 or stopcrit or i==max_iter):
+                #     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
+        return (u - self._imdiv(p)), i
         
+    
+class l2_l1_norm():
+    """This class implements the norm
+            ||p||_{2,1} = || sqrt(p1^2 + p2^2) ||_1
+        where both p1 and p2 are of size n1,n2. With the horizontal and 
+        vertical finite differences in D, this forms the TV norm as
+            TV(u) = ||Du||_{2,1}
+        The norm can be scaled by a parameter 'scale'
+        
+        __init__ input parameter:
+            - n1,n2: image sizes
+            - scale: scaling parameter
+    """
+    def __init__(self, n1, n2, scale=1):
+        self.n1, self.n2 = n1, n2
+        self.scale = scale
+        
+    def __call__(self, p):
+        return self.scale * np.sum(np.sqrt(p[0]**2+p[1]**2))
+    
+    def conj(self, p):
+        if np.any(np.sqrt(p[0]**2 + p[1]**2) > self.scale+1e-12):
+            return np.Inf
+        else:
+            return 0
+        
+    def conj_prox(self, p, tau): # does not depend on tau at all..?
+        n = np.sqrt(np.sum(p**2,axis=0))[np.newaxis,...]
+        return p/np.maximum(1,1/self.scale*n)
+
     
 # class nonNegIndicator():
 #     """ 
@@ -336,16 +378,16 @@ class total_variation():
 #     def prox(self, x, gamma):
 #         return np.maximum(x,0)
     
-# # a dummy class if we want to set F or G to zero
-# class zero():
-#     def __call__(self, x):
-#         return np.zeros((1,x.shape[1])) if len(x.shape) > 1 else 0
+class zero():
+    """ a dummy class if we want to set one of the potential terms to zero"""
+    def __call__(self, x):
+        return 0
     
-#     def grad(self, x):
-#         return np.zeros_like(x)
+    def grad(self, x):
+        return np.zeros_like(x)
     
-#     def prox(self, x):
-#         return np.copy(x)
+    def prox(self, x):
+        return np.copy(x)
     
 # class l2_loss_heteroschedastic():
 #     """

@@ -27,7 +27,7 @@ from pxmala import pxmala
 params = {
     'iterations': 10000,# if std image with worst epsilon is still too good, reduce to 2000 or 5000
     'num_chains': 1,
-    'testfile_path' : 'test_images/cameraman.tif',     # relative path to test image
+    'testfile_path' : 'test_images/wheel.png',     # relative path to test image
     'num_cores' : 1,
     'parallel': False,
     'verbose': False
@@ -67,12 +67,20 @@ def power_method(a, at, n, tol, max_iter, verbose):
             break
     return val
 
+def my_imshow(im, title):
+    plt.imshow(im,cmap='Greys_r',vmin=0,vmax=1)
+    plt.title(title)
+    plt.colorbar()
+    plt.show()
+
 #%% main method instantiating the samplers and calling the simulation
 def main():
     """ generate data - image denoising """
     rng = default_rng(38456809)
     x = iio.imread(params['testfile_path']).astype(float)
-    # careful, we assume a quadratic n x n images for simplicity. 
+    x = x-np.min(x)
+    x = x/np.max(x)
+    # careful, we assume quadratic n x n images for simplicity. 
     # Might have to rewrite parts of the files to handle non-quadratic ones
     n = x.shape[0]
     
@@ -89,6 +97,7 @@ def main():
     noise_std = np.std(y)*10**(-noise_snr/20)
     y = y + noise_std*rng.normal(size=(n,n))
     
+    
     """ define posterior. For SAPG, use reg parameter theta = 1 since it 
     handles the changing parameter inside the algorithm """
     unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
@@ -96,8 +105,8 @@ def main():
     L = max_ev/noise_std**2
    
     """ determine optimal theta using SAPG """
-    iter_outer = 40
-    iter_burnin = 20
+    iter_outer = 25
+    iter_burnin = 10
     theta0 = 0.01
     # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
     # for blur=5 roughly 500 warm up iterations
@@ -111,7 +120,7 @@ def main():
              x0=y,
              theta0=theta0,
              theta_min=0.001,
-             theta_max=1,
+             theta_max=1e2,
              epsilon_prox=3e-2,
              pd=unscaled_posterior)
     s.simulate()
@@ -120,28 +129,22 @@ def main():
     posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
     
     """ compute the MAP to check that the parameters are chosen well and the problem is not 'too easy' """
-    tau = 1/L
-    xmap = y
-    for i in np.arange(100):
-        xmap,_ = posterior.g.inexact_prox(xmap-tau*at(a(xmap)-y), gamma=1, epsilon=None, maxiter=25, verbose=False)
+    # Rewrite this part and compute the MAP using PDHG instead of forward-backward
+    # tau = 1/L
+    # xmap = y
+    # sys.stdout.write('Compute MAP: {:3}%'.format(0)); 
+    # sys.stdout.flush()
+    # n_iter_map = 500
+    # for i in np.arange(n_iter_map):
+    #     sys.stdout.write('\b'*4 + '{:3}%'.format(int(i/n_iter_map*100)))
+    #     sys.stdout.flush()
+    #     xmap,_ = posterior.g.inexact_prox(xmap-tau/(noise_std**2)*at(a(xmap)-y), gamma=tau, epsilon=None, maxiter=100, verbose=False)
+        
+    # my_imshow(x,'true image')
+    # my_imshow(y, 'noisy image')
+    # my_imshow(xmap, 'denoised image')
     
-    
-    plt.imshow(x,cmap='Greys_r',vmin=0,vmax=255)
-    plt.title('True image')
-    plt.colorbar()
-    plt.show()
-    
-    plt.imshow(y,cmap='Greys_r',vmin=0,vmax=255)
-    plt.title('Blurred & noisy image')
-    plt.colorbar()
-    plt.show()
-    
-    plt.imshow(xmap,cmap='Greys_r',vmin=0,vmax=255)
-    plt.title('Denoised image (MAP)')
-    plt.colorbar()
-    plt.show()
-    
-    # """ -- plots to check that SAPG converged -- """
+    """ -- plots to check that SAPG converged -- """
     # plt.plot(s.logpi_wu[100:], label='log-likelihood warm-up samples')
     # plt.legend()
     # plt.show()
