@@ -6,15 +6,12 @@ Created on Wed Jan 11 08:51:53 2023
 @author: lorenzkuger
 """
 
-from numpy.random import default_rng
-import imageio as iio
 import numpy as np
+from numpy.random import default_rng
+import cv2
 import matplotlib.pyplot as plt
-from pathlib import Path
-import time
-import multiprocessing as mp
-from contextlib import closing
 import sys,getopt
+
 
 # own imports
 import potentials as pot
@@ -25,11 +22,8 @@ from pxmala import pxmala
 
 #%% parameters
 params = {
-    'iterations': 10000,# if std image with worst epsilon is still too good, reduce to 2000 or 5000
-    'num_chains': 1,
+    'iterations': 1000,# if std image with worst epsilon is still too good, reduce to 2000 or 5000
     'testfile_path' : 'test_images/wheel.png',     # relative path to test image
-    'num_cores' : 1,
-    'parallel': False,
     'verbose': False
 }
 
@@ -111,18 +105,11 @@ def main():
     # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
     # for blur=5 roughly 500 warm up iterations
     # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
-    s = sapg(iter_wu=500,
-             iter_outer=iter_outer,
-             iter_burnin=iter_burnin,
-             iter_inner=1,
-             tau=0.9/L,
-             delta=lambda k: 0.1/(theta0*n**2) * (k+1)**(-0.8),
+    s = sapg(iter_wu=500,iter_outer=iter_outer,iter_burnin=iter_burnin,iter_inner=1,
+             tau=0.9/L,delta=lambda k: 0.1/(theta0*n**2)*(k+1)**(-0.8),
              x0=y,
-             theta0=theta0,
-             theta_min=0.001,
-             theta_max=1e2,
-             epsilon_prox=3e-2,
-             pd=unscaled_posterior)
+             theta0=theta0,theta_min=0.001,theta_max=1e2,
+             epsilon_prox=3e-2,pd=unscaled_posterior)
     s.simulate()
     # the final estimate for the optimal regularization parameter
     mu_tv = s.mean_theta[-1]
@@ -210,11 +197,8 @@ def print_help():
     print(' ')
     print('Options:')
     print('    -h (--help): Print help.')
-    print('    -i (--iterations=): Number of iterations of each Markov chain')
-    print('    -z (--num_chains=): Number of Markov chains to run')
+    print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
-    print('    -p (--parallel): Use parallel processing for several chains.')
-    print('    -c (--num_cores=): Number of cores to use in parallel processing (default=1).')
     print('    -v (--verbose): Verbose mode.')
 
 if __name__ == '__main__':
@@ -233,14 +217,8 @@ if __name__ == '__main__':
             sys.exit()
         elif opt in ("-i", "--iterations"):
             params['iterations'] = int(arg)
-        elif opt in ("-z", "--num_chains"):
-            params['num_chains'] = float(arg)
         elif opt in ("-f", "--testfile_path"):
             params['testfile_path'] = arg
-        elif opt in ("-p", "--parallel"):
-            parallel = True
-        elif opt in ("-c", "--num_cores"):
-            params['num_cores'] = int(arg)
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()

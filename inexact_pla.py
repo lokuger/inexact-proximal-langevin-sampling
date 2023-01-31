@@ -19,11 +19,11 @@ class inexact_pla():
         self.iter = 0
         self.shape_x = x0.shape
         self.x0 = np.copy(x0)
-        self.x = np.zeros((self.shape_x[0],self.shape_x[1],n_iter+1))
-        self.x[:,:,0] = self.x0
+        self.x = np.zeros(self.shape_x+(n_iter+1,))
+        self.x[...,0] = self.x0
         self.f = pd.f
         self.df = pd.f.grad
-        self.dfx = self.df(self.x[:,:,0])
+        self.dfx = self.df(self.x[...,0])
         self.g = pd.g
         self.inexact_prox_g = pd.g.inexact_prox
         self.rng = default_rng()
@@ -55,9 +55,9 @@ class inexact_pla():
         tau = self.tau(self.iter)
         epsilon = self.epsilon(self.iter)
         
-        y = self.x[:,:,self.iter-1] - tau * self.dfx + np.sqrt(2*tau) * xi
+        y = self.x[...,self.iter-1] - tau * self.dfx + np.sqrt(2*tau) * xi
         x, num_its = self.inexact_prox_g(y, gamma=tau, epsilon=epsilon, verbose=False)
-        self.x[:,:,self.iter] = x
+        self.x[...,self.iter] = x
         self.dfx = self.df(x)
         self.logpi_iterates[self.iter-1] = - self.f(x) - self.g(x)
         
