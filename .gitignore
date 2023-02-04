@@ -1,5 +1,7 @@
 # result images
+results/*
 *.png
+results_berlin/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
