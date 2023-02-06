@@ -10,10 +10,9 @@ import numpy as np
 from numpy.random import default_rng
 import matplotlib.pyplot as plt
 import sys, getopt, os
-import 
+from skimage import data, io, transform
 
-from pdla import pdla
-from pdhg import pdhg
+from inexact_pla import inexact_pla
 from sapg import sapg
 import potentials as pot
 import distributions as pds
@@ -21,7 +20,7 @@ import distributions as pds
 #%% initial parameters: test image, computation settings etc.
 params = {
     'iterations': 1000,
-    'testfile_path': 'test_images/fibo.jpeg',
+    'testfile_path': 'test_images/wheel.png',
     'efficient': True,
     'verbose': True
     }
@@ -80,90 +79,111 @@ def main():
     rng = default_rng(13401)
     verb = params['verbose']
     try:
-        x = cv2.imread(params['testfile_path']).astype(float)
-    except AttributeError:
+        x = io.imread(params['testfile_path'],as_gray=True).astype(float)
+    except FileNotFoundError:
         print('Provided test image did not exist under that path, aborting.')
         sys.exit()
     # handle images that are too large or colored
-    if x.shape[0] > 512 or x.shape[1] > 512: x = cv2.resize(x, dsize=(512,512))
-    if len(x.shape) == 3 and x.shape[2] == 3: x = 0.299*x[...,0] + 0.587*x[...,1] + 0.114*x[...,2]
-
+    if x.shape[0] > 512 or x.shape[1] > 512: x = transform.resize(x, (512,512))
     x = x-np.min(x)
     x = x/np.max(x)
     # assume quadratic images
     n = x.shape[0]
     
+    tv = pot.total_variation(n, n, scale=1)
+    tv_groundtruth = tv(x)
+    
     #%% Generate noisy observation for l1-tv using additive Laplace noise or salt-pepper noise
     blur_width = 5
     a,at,max_ev = blur(n,blur_width)
+    # a,at,max_ev = lambda x:x, lambda x:x, 1
     
     noise_std = 0.15
-    lamda = 6
-    # normally distributed noise
     y = a(x) + noise_std*rng.normal(size=x.shape)
+    L = max_ev/noise_std**2
+    
+    #%% define the posterior and compute the optimal regularization parameter using SAPG
+    # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
+    # # metaparameter of the posterior: L = Lipschitz constant of nabla F, necessary for stepsize
+    
+    # theta0 = 1
+    # # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
+    # # for blur=5 roughly 500 warm up iterations
+    # # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
+    # s = sapg(iter_wu=25,iter_outer=60,iter_burnin=10,iter_inner=1,
+    #           tau=0.9/L,delta=lambda k: 0.2/(theta0*n**2)*(k+1)**(-0.8),
+    #           x0=x,theta0=theta0,theta_min=0.01,theta_max=1e2,
+    #           epsilon_prox=3e-2,pd=unscaled_posterior)
+    # ###################### change initialization later : iter_wu back to 500, x0 back to y
+    # s.simulate()
+    # mu_tv = s.mean_theta[-1]
+    mu_tv = 5
+    
+    #%% -- plots to check that SAPG converged --
+    # # log pi values during warm-up Markov chain
+    # plt.plot(s.logpi_wu, label='log-likelihood warm-up samples')
+    # plt.legend()
+    # plt.show()
+    
+    # # thetas
+    # plt.plot(s.theta,label='theta_n')
+    # plt.plot(n**2/s.mean_g, label='dim/g(u_n)', color='orange')
+    # plt.plot(np.arange(s.iter_burnin+1,s.iter_outer+1), s.mean_theta, label='theta_bar',color='green')
+    # plt.legend()
+    # plt.show()
+    
+    # # values g(X_n)
+    # plt.plot(s.mean_g, label='g(u_n)')
+    # plt.hlines(tv_groundtruth,0,len(s.mean_g)+1, label='g(u_true)')
+    # plt.legend()
+    # plt.show()
     
     #%% denoise the image (=compute MAP using PDHG)
     if verb: sys.stdout.write('Compute ROF model MAP - '); sys.stdout.flush()
-    tv = pot.total_variation(n, n, scale=lamda)
-    u,_ = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e-5, max_iter=400, verbose=verb)
+    # change this to PDHG instead of inexact prox!!
+    u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
     if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
-    
-    #%% define the posterior and compute the optimal regularization parameter using SAPG
-    unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
-    # metaparameter of the posterior: L = Lipschitz constant of nabla F, necessary for stepsize
-    L = max_ev/noise_std**2
-    
-    theta0 = 0.01
-    # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
-    # for blur=5 roughly 500 warm up iterations
-    # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
-    s = sapg(iter_wu=500,iter_outer=25,iter_burnin=10,iter_inner=1,
-             tau=0.9/L,delta=lambda k: 0.1/(theta0*n**2)*(k+1)**(-0.8),
-             x0=y,theta0=theta0,theta_min=0.001,theta_max=1e2,
-             epsilon_prox=3e-2,pd=unscaled_posterior)
-    s.simulate()
     
     #%% sample using PDLA
-    k = tv._imgrad
-    kt = tv._imdiv
-    x0, y0 = np.zeros_like(x), np.zeros((2,)+x.shape)
-    tau = 1/np.sqrt(8)
-    sigma = 1/(tau*8)
-    n_samples = params['iterations']
-    burnin = 50
-    f = pot.l2_l1_norm(n, n, scale=lamda)
-    g = pot.l2_loss_homoschedastic(y=y, sigma2=noise_std**2)
-    eff = params['efficient']
+    # k = tv._imgrad
+    # kt = tv._imdiv
+    # x0 = np.zeros_like(x)
+    # tau = 1/L
+    # epsilon = 1e-1
+    # n_samples = params['iterations']
+    # burnin = 50
+    # posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
+    # eff = params['efficient']
     
-    sampler = pdla(x0, y0, tau, sigma, n_samples, burnin, f, g, k, kt, efficient=eff)
-    
-    if verb: sys.stdout.write('Sample from ROF posterior - '); sys.stdout.flush()
-    sampler.simulate(verbose=verb)
-    if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
+    # sampler = inexact_pla(x0, tau, epsilon, n_samples, burnin, posterior, rng=rng, efficient=eff)
+    # if verb: sys.stdout.write('Sample from ROF posterior - '); sys.stdout.flush()
+    # sampler.simulate(verbose=verb)
+    # if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
     
     #%% plots
     # diagnostic plot, making sure the sampler looks plausible
-    plt.plot(np.arange(1,n_samples+1), sampler.logpi_vals)
-    plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n)')
-    plt.show()
+    # plt.plot(np.arange(1,n_samples+1), sampler.logpi_vals)
+    # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n)')
+    # plt.show()
     
     # images
     my_imshow(x, 'ground truth')
     my_imshow(y, 'noisy image')
-    my_imshow(u,'ROF MAP (dual AGD, mu_TV = {})'.format(lamda))
-    my_imshow(sampler.mean, 'Sample Mean')
-    my_imshow(sampler.std, 'Sample standard deviation', np.min(sampler.std), np.max(sampler.std))
-    my_imshow(sampler.var, 'Sample variance', np.min(sampler.var), np.max(sampler.var))
+    my_imshow(u,'ROF MAP (dual AGD, mu_TV = {:.1f})'.format(mu_tv))
+    print('PSNR: of denoised image: {:.2f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+    # my_imshow(sampler.mean, 'Sample Mean')
+    # my_imshow(sampler.std, 'Sample standard deviation', np.min(sampler.std), np.max(sampler.std))
+    # my_imshow(sampler.var, 'Sample variance', np.min(sampler.var), np.max(sampler.var))
     
     #%% saving
-    cv2.imwrite(image_dir+'/ground_truth.png',x*256)
-    cv2.imwrite(image_dir+'/noisy.png',y*256)
-    cv2.imwrite(image_dir+'/rof_map.png',u*256)
-    cv2.imwrite(image_dir+'/rof_posterior_mean.png',sampler.mean*256)
-    r1 = sampler.std - np.min(sampler.std)
-    cv2.imwrite(image_dir+'/rof_posterior_std.png',r1/np.max(r1)*256)
-    r2 = sampler.var - np.min(sampler.var)
-    cv2.imwrite(image_dir+'/rof_posterior_var.png',r2/np.max(r2)*256)
+    # cv2.imwrite(image_dir+'/ground_truth.png',x*256)
+    # cv2.imwrite(image_dir+'/noisy.png',y*256)
+    # cv2.imwrite(image_dir+'/rof_map.png',u*256)
+    # cv2.imwrite(image_dir+'/rof_posterior_mean.png',sampler.mean*256)
+    # r1 = sampler.std - np.min(sampler.std)
+    # cv2.imwrite(image_dir+'/rof_posterior_std.png',r1/np.max(r1)*256)
+    # r2 = sampler.var - np.min(sampler.var)
+    # cv2.imwrite(image_dir+'/rof_posterior_var.png',r2/np.max(r2)*256)
     
     
 #%% help function for calling from command line

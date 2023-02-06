@@ -23,40 +23,39 @@ from scipy.special import erf
 #     def unscaled_pdf(self, x):
 #         return np.exp(-self.f(x)-self.g(x))
     
-# class l2_denoise_tv():
-#     """
-#     Represents posterior for an L2/Gaussian data loss together with a TV 
-#     regularization term scaled by a parameter mu_TV
-#     Potential:
+class l2_denoise_tv():
+    """
+    Represents posterior for an L2/Gaussian data loss together with a TV 
+    regularization term scaled by a parameter mu_TV potential:
         
-#         V(u) = F(u) + G(u) with
+        V(u) = F(u) + G(u) with
         
-#         F(u) = 1/(2*sigma^2) * ||u - y||_2^2,
-#         G(u) = mu * TV(u)
+        F(u) = 1/(2*sigma^2) * ||u - y||_2^2,
+        G(u) = mu * TV(u)
     
-#     __init__ input parameters:
-#     n1, n2:     dimensions of image
-#     y:          shift y in the l2-loss, shape (n1,n2)
-#     noise_std:  standard deviation sigma of the l2-loss (noise model: 
-#                 homoschedastic errors with variance sigma^2)
-#     mu_tv:      TV regularization parameter
-#     """
-#     def __init__(self, n1, n2, y, noise_std=1, mu_tv=1):
-#         self.d = n1*n2
-#         self.n1 = n1
-#         self.n2 = n2
-#         self.y = y
-#         self.noise_std = noise_std
-#         self.mu_tv = mu_tv
+    __init__ input parameters:
+    n1, n2:     dimensions of image
+    y:          shift y in the l2-loss, shape (n1,n2)
+    noise_std:  standard deviation sigma of the l2-loss (noise model: 
+                homoschedastic errors with variance sigma^2)
+    mu_tv:      TV regularization parameter
+    """
+    def __init__(self, n1, n2, y, noise_std=1, mu_tv=1):
+        self.d = n1*n2
+        self.n1 = n1
+        self.n2 = n2
+        self.y = y
+        self.noise_std = noise_std
+        self.mu_tv = mu_tv
         
-#         self.f = pot.l2_loss_homoschedastic(d=self.d, y=self.y, sigma=noise_std)
-#         self.g = pot.total_variation(self.n1, self.n2, mu_tv) if self.mu_tv > 0 else pot.Zero()
+        self.f = pot.l2_loss_homoschedastic(y=self.y, sigma2=noise_std**2)
+        self.g = pot.total_variation(self.n1, self.n2, mu_tv) if self.mu_tv > 0 else pot.Zero()
     
-#     def pdf(self, x):
-#         raise NotImplementedError("Cannot compute the correct pdf because normalization constant is unknown. Please use L2Loss_TVReg.unscaled_pdf()")
+    def pdf(self, x):
+        raise NotImplementedError("Cannot compute the correct pdf because normalization constant is unknown. Please use L2Loss_TVReg.unscaled_pdf()")
         
-#     def unscaled_pdf(self, x):
-#         return np.exp(-self.f(x)-self.g(x))
+    def unscaled_pdf(self, x):
+        return np.exp(-self.f(x)-self.g(x))
     
 class l2_deblur_tv():
     """
@@ -80,14 +79,14 @@ class l2_deblur_tv():
     def __init__(self, n1, n2, a, at, y, noise_std=1, mu_tv=1):
         self.d = n1*n2
         self.n1 = n1
+        self.n2 = n2
         self.a = a
         self.at = at
-        self.n2 = n2
         self.y = y
         self.noise_std = noise_std
         self.mu_tv = mu_tv
         
-        self.f = pot.l2_loss_reconstruction_homoschedastic(im_shape=(n1,n2), y=y, sigma2=noise_std**2, a=a,at=at)
+        self.f = pot.l2_loss_reconstruction_homoschedastic(y=y, sigma2=noise_std**2, a=a,at=at)
         self.g = pot.total_variation(n1,n2,mu_tv) if mu_tv > 0 else pot.zero()
     
     def pdf(self, x):

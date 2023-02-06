@@ -45,10 +45,10 @@ class l2_loss_reconstruction_homoschedastic():
     F(x) = 1/(2*sigma^2) * ||Ax - y||_2^2
     
     Inputs:
-        - im_shape: shape of x
         - y:        right hand side data
         - sigma2:   variance of Gaussian noise
-        - a, at:    forward operator A and its transpose. Given as callable a(x), at(y)
+        - a:        forward operator A, given as callable a(x)
+        - at:       transpose/adjoint of A. Given as callable at(y)
     """
     def __init__(self, y, sigma2, a, at):
         self.y = y
@@ -57,8 +57,10 @@ class l2_loss_reconstruction_homoschedastic():
         self.at = at
     
     def __call__(self, x):
-        """
-        Accepts only inputs of shape self.im_shape
+        """ 
+        Computes 
+            1/(2*sigma^2) ||a(x) - y||_2^2
+        Make sure that shape of input x is correct for the application of x
         """
         return 1/(2*self.sigma2) * np.sum((self.a(x)-self.y)**2)
     
@@ -89,8 +91,8 @@ class l1_loss_homoschedastic():
     def grad(self, x):
         raise NotImplementedError('L1 norm has no gradient')
         
-    def prox(self, x, tau):
-        return self.y + np.maximum(0, np.abs(x-self.y)-tau/self.b)*np.sign(x-self.y)
+    def prox(self, x, gamma):
+        return self.y + np.maximum(0, np.abs(x-self.y)-gamma/self.b)*np.sign(x-self.y)
 
 # class L1loss_scaled():
 #     """
@@ -350,10 +352,10 @@ class l2_l1_norm():
         self.scale = scale
         
     def __call__(self, p):
-        return self.scale * np.sum(np.sqrt(p[0]**2+p[1]**2))
+        return self.scale * np.sum(np.sqrt(np.sum(p**2,axis=0)))
     
     def conj(self, p):
-        if np.any(np.sqrt(p[0]**2 + p[1]**2) > self.scale+1e-12):
+        if np.any(np.sqrt(np.sum(p**2,axis=0)) > self.scale+1e-12):
             return np.Inf
         else:
             return 0

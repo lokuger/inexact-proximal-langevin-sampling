@@ -137,6 +137,6 @@ class sapg():
         if self.prox_is_exact:
             self.x = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1])
         else:
-            self.x, _ = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1], epsilon=self.eps_prox)
+            self.x, _ = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1], epsilon=self.eps_prox, max_iter=100)
         self.dfx = self.df(self.x)
         

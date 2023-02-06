@@ -14,38 +14,40 @@ class inexact_pla():
         - epsilon   : prox accuracy, either a scalar or a handle of n as epsilon(n)
         - pd        : probability distribution, object of distributions.py
     """
-    def __init__(self, n_iter, tau, x0, epsilon, pd):
+    def __init__(self, x0, tau, epsilon, n_iter, burnin, pd, rng=None, efficient=False):
         self.n_iter = n_iter
+        self.burnin = burnin
         self.iter = 0
+        
         self.shape_x = x0.shape
-        self.x0 = np.copy(x0)
-        self.x = np.zeros(self.shape_x+(n_iter+1,))
-        self.x[...,0] = self.x0
+        self.eff = efficient
+        if self.eff:        # save only running sum and sum of squares to compute mean & std estimates
+            self.x = np.copy(x0)
+            self.sum = np.zeros(self.shape_x)
+            self.sum_sq = np.zeros(self.shape_x)
+        else:
+            self.x = np.zeros(self.shape_x+(self.n_iter+1,))
+            self.x[...,0] = x0
+        
+        # iteration parameters
         self.f = pd.f
         self.df = pd.f.grad
-        self.dfx = self.df(self.x[...,0])
+        self.dfx = self.df(self.x) if self.eff else self.df(self.x[...,0])
         self.g = pd.g
         self.inexact_prox_g = pd.g.inexact_prox
-        self.rng = default_rng()
+        self.rng = rng if rng is not None else default_rng()    # for reproducibility allow to pass rng
         self.tau = lambda n : tau if np.isscalar(tau) else tau
         self.epsilon = lambda n : epsilon if np.isscalar(epsilon) else epsilon
-        self.logpi_iterates = np.zeros((n_iter,))
-        self.num_prox_iterations_total = 0
+        
+        # diagnostic checks
+        self.logpi_vals = np.zeros((self.n_iter,))
+        self.num_prox_its_total = 0
     
-    def simulate(self, verbose=1):
-        # from wasserstein comparisons:
-        # W2dist = np.zeros((self.max_iter+1,))
-        # W2dist[0] = ot.emd2_1d(np.reshape(self.x0,(-1,)), np.reshape(x_comp,(-1,)))
-        if verbose:
-            print('Running inexact PLA')
-            sys.stdout.write('Sampling progress: {:3d}%'.format(0))
-            sys.stdout.flush()
+    def simulate(self, verbose=False):
+        if verbose: sys.stdout.write('run innexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
         while self.iter < self.n_iter:
             self.update()
-            if verbose > 0:
-                sys.stdout.write('\b'*4+'{:3d}%'.format(int(self.iter/self.n_iter*100)))
-                sys.stdout.flush()
-            #W2dist[self.iter] = ot.emd2_1d(np.reshape(self.x,(-1,)), np.reshape(x_comp,(-1,)))
+            if verbose and self.iter%20==0: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(self.iter/self.n_iter*100)));
         if verbose > 0:
             sys.stdout.write('\n')
         
@@ -55,11 +57,17 @@ class inexact_pla():
         tau = self.tau(self.iter)
         epsilon = self.epsilon(self.iter)
         
-        y = self.x[...,self.iter-1] - tau * self.dfx + np.sqrt(2*tau) * xi
-        x, num_its = self.inexact_prox_g(y, gamma=tau, epsilon=epsilon, verbose=False)
-        self.x[...,self.iter] = x
-        self.dfx = self.df(x)
-        self.logpi_iterates[self.iter-1] = - self.f(x) - self.g(x)
+        if self.eff:
+            self.x, num_prox_its = self.inexact_prox_g(self.x-tau*self.dfx+np.sqrt(2*tau)*xi, tau, epsilon)
+            self.dfx = self.df(self.x)
+            self.logpi_vals[self.iter-1] = self.f(self.x) + self.g(self.x)
+            if self.iter > self.burnin:
+                self.sum = self.sum + self.x
+                self.sum_sq = self.sum_sq + self.x**2
+        else:
+            self.x[...,self.iter], num_prox_its = self.inexact_prox_g(self.x[...,self.iter-1]-tau*self.dfx+np.sqrt(2*tau)*xi, tau, epsilon)
+            self.dfx = self.df(self.x)
+            self.logpi_vals[self.iter-1] = self.f(self.x[...,self.iter]) + self.g(self.x[...,self.iter])
         
-        self.num_prox_iterations_total += num_its
+        self.num_prox_its_total += num_prox_its
         
