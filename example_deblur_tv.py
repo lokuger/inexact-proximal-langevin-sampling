@@ -14,6 +14,7 @@ from skimage import data, io, transform
 
 from inexact_pla import inexact_pla
 from sapg import sapg
+from pdhg import pdhg
 import potentials as pot
 import distributions as pds
 
@@ -141,7 +142,16 @@ def main():
     #%% denoise the image (=compute MAP using PDHG)
     if verb: sys.stdout.write('Compute ROF model MAP - '); sys.stdout.flush()
     # change this to PDHG instead of inexact prox!!
-    u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
+    x0, y0 = np.zeros(x.shape), np.zeros((2,)+x.shape)
+    tau, sigma = 1/np.sqrt(8), 1/np.sqrt(8)
+    n_iter = 1000
+    f = pot.l2_l1_norm(n, n)
+    k,kt = tv._imgrad, tv._imdiv
+    g = pot.l2_loss_reconstruction_homoschedastic(y, noise_std**2, a, at)
+    primal_dual = pdhg(x0, y0, tau, sigma, n_iter, f, g, k, kt)
+    u = primal_dual.compute(verbose=True)
+    # quicker than PDHG for the denoising-only case:
+    # u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
     if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
     
     #%% sample using PDLA
