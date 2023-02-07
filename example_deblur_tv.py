@@ -10,11 +10,12 @@ import numpy as np
 from numpy.random import default_rng
 import matplotlib.pyplot as plt
 import sys, getopt, os
+from time import time
 from skimage import data, io, transform
 
 from inexact_pla import inexact_pla
 from sapg import sapg
-from pdhg import pdhg
+from pdhg import pdhg, acc_pdhg
 import potentials as pot
 import distributions as pds
 
@@ -27,7 +28,7 @@ params = {
     }
 
 #%% auxiliary functions
-def blur(n, b):
+def blur_unif(n, b):
     """compute the blur operator a, its transpose a.t and the maximum eigenvalue 
     of ata.
     Carfeul, this assumes a quadratic n x n image
@@ -42,16 +43,35 @@ def blur(n, b):
     HC_FFT = np.conj(H_FFT)
     a = lambda x : np.real(np.fft.ifft2(H_FFT * np.fft.fft2(x)))
     at = lambda x : np.real(np.fft.ifft2(HC_FFT * np.fft.fft2(x)))
-    max_eigval = power_method(a, at, n, 1e-4, int(1e3), 0)
+    ata = lambda x : np.real(np.fft.ifft2(H_FFT * HC_FFT * np.fft.fft2(x)))
+    max_eigval = power_method(ata, n, 1e-4, int(1e3))
+    return a,at,max_eigval
+
+def blur_gauss(n, sigma):
+    """compute the blur operator a, its transpose a.t and the maximum eigenvalue 
+    of ata.
+    Carfeul, this assumes a quadratic n x n image, with n even
+    blur standard dev is assumed to be given in #pixels"""
+    t = np.arange(-n/2+1,n/2+1)
+    h = np.exp(-t**2/(2*sigma**2))
+    h = h / np.sum(h)
+    h = np.roll(h, -int(n/2)+1)
+    h = h[np.newaxis,:] * h[:,np.newaxis]
+    H_FFT = np.fft.fft2(h)
+    HC_FFT = np.conj(H_FFT)
+    a = lambda x : np.real(np.fft.ifft2(H_FFT * np.fft.fft2(x)))
+    at = lambda x : np.real(np.fft.ifft2(HC_FFT * np.fft.fft2(x)))
+    ata = lambda x : np.real(np.fft.ifft2(H_FFT * HC_FFT * np.fft.fft2(x)))
+    max_eigval = power_method(ata, n, 1e-4, int(1e3))
     return a,at,max_eigval
     
-def power_method(a, at, n, tol, max_iter, verbose):
+def power_method(ata, n, tol, max_iter, verbose=False):
     """power method to compute the maximum eigenvalue of the linear op at*a"""
     x = np.random.normal(size=(n,n))
     x = x/np.linalg.norm(x.ravel())
     val, val_old = 1, 1
     for k in range(max_iter):
-        x = at(a(x))
+        x = ata(x)
         val = np.linalg.norm(x.ravel())
         rel_var = np.abs(val-val_old)/val_old
         val_old = val
@@ -96,10 +116,11 @@ def main():
     
     #%% Generate noisy observation for l1-tv using additive Laplace noise or salt-pepper noise
     blur_width = 5
-    a,at,max_ev = blur(n,blur_width)
-    # a,at,max_ev = lambda x:x, lambda x:x, 1
+    # a,at,max_ev = blur_unif(n,blur_width)
+    a,at,max_ev = blur_gauss(n,blur_width)
+    # a,at,max_ev = lambda x : x, lambda x : x, 1
     
-    noise_std = 0.15
+    noise_std = 0.01
     y = a(x) + noise_std*rng.normal(size=x.shape)
     L = max_ev/noise_std**2
     
@@ -118,7 +139,12 @@ def main():
     # ###################### change initialization later : iter_wu back to 500, x0 back to y
     # s.simulate()
     # mu_tv = s.mean_theta[-1]
-    mu_tv = 5
+    
+    
+    my_imshow(x, 'ground truth')
+    my_imshow(y, 'noisy image')
+    
+    mu_tv = 2.8
     
     #%% -- plots to check that SAPG converged --
     # # log pi values during warm-up Markov chain
@@ -140,28 +166,28 @@ def main():
     # plt.show()
     
     #%% denoise the image (=compute MAP using PDHG)
-    if verb: sys.stdout.write('Compute ROF model MAP - '); sys.stdout.flush()
-    # change this to PDHG instead of inexact prox!!
     x0, y0 = np.zeros(x.shape), np.zeros((2,)+x.shape)
-    tau, sigma = 1/np.sqrt(8), 1/np.sqrt(8)
+    tau, sigma = 1/(np.sqrt(8)+L), 1/np.sqrt(8)
     n_iter = 1000
-    f = pot.l2_l1_norm(n, n)
+    f = pot.l2_l1_norm(n, n, scale=mu_tv)
     k,kt = tv._imgrad, tv._imdiv
-    g = pot.l2_loss_reconstruction_homoschedastic(y, noise_std**2, a, at)
-    primal_dual = pdhg(x0, y0, tau, sigma, n_iter, f, g, k, kt)
-    u = primal_dual.compute(verbose=True)
-    # quicker than PDHG for the denoising-only case:
-    # u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
+    g = pot.zero()
+    h = pot.l2_loss_reconstruction_homoschedastic(y, noise_std**2, a, at)
+    pd = pdhg(x0, y0, tau, sigma, n_iter, f, k, kt, g, h, efficient=True)
+    
+    if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
+    u = pd.compute(verbose=True)
     if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
     
-    #%% sample using PDLA
-    # k = tv._imgrad
-    # kt = tv._imdiv
+    # quicker than PDHG for the denoising-only case: use aGD on dual or aPDHG
+    # u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
+    
+    #%% sample using inexact PLA
     # x0 = np.zeros_like(x)
     # tau = 1/L
     # epsilon = 1e-1
     # n_samples = params['iterations']
-    # burnin = 50
+    # burnin = 500
     # posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
     # eff = params['efficient']
     
@@ -177,13 +203,11 @@ def main():
     # plt.show()
     
     # images
-    my_imshow(x, 'ground truth')
-    my_imshow(y, 'noisy image')
-    my_imshow(u,'ROF MAP (dual AGD, mu_TV = {:.1f})'.format(mu_tv))
-    print('PSNR: of denoised image: {:.2f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+    my_imshow(u,'ROF MAP (PDHG, mu_TV = {:.1f})'.format(mu_tv))
+    print('mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
     # my_imshow(sampler.mean, 'Sample Mean')
-    # my_imshow(sampler.std, 'Sample standard deviation', np.min(sampler.std), np.max(sampler.std))
-    # my_imshow(sampler.var, 'Sample variance', np.min(sampler.var), np.max(sampler.var))
+    # my_imshow(np.log10(sampler.std), 'Sample standard deviation (log10)', np.min(np.log10(sampler.std)), np.max(np.log10(sampler.std)))
+    # my_imshow(np.log10(sampler.var), 'Sample variance (log10)', np.min(sampler.var), np.max(np.log(sampler.var)))
     
     #%% saving
     # cv2.imwrite(image_dir+'/ground_truth.png',x*256)

@@ -388,8 +388,8 @@ class zero():
     def grad(self, x):
         return np.zeros_like(x)
     
-    def prox(self, x):
-        return np.copy(x)
+    def prox(self, x, gamma):
+        return x
     
 # class l2_loss_heteroschedastic():
 #     """
