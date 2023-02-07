@@ -24,8 +24,9 @@ params = {
     'iterations': 10000,
     'testfile_path': 'test_images/cameraman.tif',
     'blurtype': 'gaussian',
-    'bandwidth': 4,
+    'bandwidth': 3,
     'noise_std': 0.01,
+    'logepsilon': -9,
     'efficient': True,
     'verbose': True
     }
@@ -97,6 +98,8 @@ def main():
     if not os.path.exists(blur_dir): os.makedirs(blur_dir)
     bandwidth_dir = blur_dir + '/blur{}'.format(params['bandwidth'])
     if not os.path.exists(bandwidth_dir): os.makedirs(bandwidth_dir)
+    accuracy_dir = bandwidth_dir + '/logepsilon{}'.format(params['logepsilon'])
+    if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
     results_dir = bandwidth_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
     if not os.path.exists(results_dir): os.makedirs(results_dir)
         
@@ -119,7 +122,7 @@ def main():
     tv_groundtruth = tv(x)
     
     #%% Forward model & corrupted data
-    blur_width = 3#4
+    blur_width = params['bandwidth']
     if params['blurtype'] == 'gaussian': 
         a,at,max_ev = blur_gauss(n,blur_width) 
     elif params['blurtype'] == 'uniform':
@@ -130,7 +133,7 @@ def main():
     
     # a,at,max_ev = lambda x : x, lambda x : x, 1
     
-    noise_std = 0.01
+    noise_std = params['noise_std']
     y = a(x) + noise_std*rng.normal(size=x.shape)
     L = max_ev/noise_std**2
     
@@ -203,7 +206,7 @@ def main():
     #%% sample using inexact PLA
     x0 = np.zeros_like(x)
     tau = 1/L
-    epsilon = 1e-2
+    epsilon = 10**params['logepsilon']
     n_samples = params['iterations']
     burnin = 2000#1000*blur_width # rough approximation to the necessary burn-in in our setting (empirically observed)
     posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
@@ -223,7 +226,7 @@ def main():
     plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
     plt.show()
     
-    my_imshow(ipla.mean, 'Sample Mean')
+    my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['logepsilon']))
     logstd = np.log10(ipla.std)
     my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
     print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
@@ -254,14 +257,16 @@ def print_help():
     print('    -b (--blur=): Type of blurring. 0 = No blur, denoising only; 1 = Gaussian [default]; 2 = Uniform')
     print('    -w (--width=): Bandwidth of blur, only applicable if blurtype > 0. For Gaussian, this is the std of the blur kernel, for uniform this is the size of the mask')
     print('    -s (--std=): Standard deviation of the noise added to the blurred image. The true image is always scaled to [0,1], so noise should be chosen accordingly depending on what blur type is used and how hard you want the problem to be. :)')
+    print('    -l (--logepsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**logepsilon in verbose mode')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficient","verbose"])
+                                    "efficientOff","blur=","width=","std=",
+                                    "logepsilon=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -284,6 +289,8 @@ if __name__ == '__main__':
             params['bandwidth'] = int(arg)
         elif opt in ("-s", "--std"):
             params['noise_std'] = float(arg)
+        elif opt in ("-l", "--logepsilon"):
+            params['logepsilon'] = int(arg)
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()
