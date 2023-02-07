@@ -21,12 +21,12 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
+    'iterations': 3500,
     'testfile_path': 'test_images/cameraman.tif',
     'blurtype': 'gaussian',
     'bandwidth': 3,
     'noise_std': 0.01,
-    'logepsilon': -9,
+    'logepsilon': -5,
     'efficient': True,
     'verbose': True
     }
@@ -100,7 +100,7 @@ def main():
     if not os.path.exists(bandwidth_dir): os.makedirs(bandwidth_dir)
     accuracy_dir = bandwidth_dir + '/logepsilon{}'.format(params['logepsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    results_dir = bandwidth_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
+    results_dir = accuracy_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
     if not os.path.exists(results_dir): os.makedirs(results_dir)
         
     #%% Ground truth
@@ -233,12 +233,12 @@ def main():
     print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
     
     #%% saving
-    io.imsave(results_dir+'/ground_truth.png',x*256)
-    io.imsave(results_dir+'/noisy.png',y*256)
-    io.imsave(results_dir+'/rof_map.png',u*256)
-    io.imsave(results_dir+'/rof_posterior_mean.png',ipla.mean*256)
+    io.imsave(results_dir+'/ground_truth.png',np.clip(x*256,0,255).astype(np.uint8))
+    io.imsave(results_dir+'/noisy.png',np.clip(y*256,0,255).astype(np.uint8))
+    io.imsave(results_dir+'/rof_map.png',np.clip(u*256,0,255).astype(np.uint8))
+    io.imsave(results_dir+'/rof_posterior_mean.png',np.clip(ipla.mean*256,0,255).astype(np.uint8))
     r1 = ipla.std - np.min(ipla.std)
-    io.imsave(results_dir+'/rof_posterior_std.png',r1/np.max(r1)*256)
+    io.imsave(results_dir+'/rof_posterior_std.png',np.clip(r1/np.max(r1)*256,0,255).astype(np.uint8))
     
     
 #%% help function for calling from command line
