@@ -208,7 +208,7 @@ def main():
     tau = 1/L
     epsilon = 10**params['logepsilon']
     n_samples = params['iterations']
-    burnin = 2000#1000*blur_width # rough approximation to the necessary burn-in in our setting (empirically observed)
+    burnin = 1000*blur_width # rough approximation to the necessary burn-in in our setting (empirically observed)
     posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
     eff = params['efficient']
     
@@ -233,12 +233,12 @@ def main():
     print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
     
     #%% saving
-    io.imwrite(results_dir+'/ground_truth.png',x*256)
-    io.imwrite(results_dir+'/noisy.png',y*256)
-    io.imwrite(results_dir+'/rof_map.png',u*256)
-    io.imwrite(results_dir+'/rof_posterior_mean.png',ipla.mean*256)
+    io.imsave(results_dir+'/ground_truth.png',x*256)
+    io.imsave(results_dir+'/noisy.png',y*256)
+    io.imsave(results_dir+'/rof_map.png',u*256)
+    io.imsave(results_dir+'/rof_posterior_mean.png',ipla.mean*256)
     r1 = ipla.std - np.min(ipla.std)
-    io.imwrite(results_dir+'/rof_posterior_std.png',r1/np.max(r1)*256)
+    io.imsave(results_dir+'/rof_posterior_std.png',r1/np.max(r1)*256)
     
     
 #%% help function for calling from command line
