@@ -233,14 +233,12 @@ def main():
     print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
     
     #%% saving
-    # cv2.imwrite(image_dir+'/ground_truth.png',x*256)
-    # cv2.imwrite(image_dir+'/noisy.png',y*256)
-    # cv2.imwrite(image_dir+'/rof_map.png',u*256)
-    # cv2.imwrite(image_dir+'/rof_posterior_mean.png',sampler.mean*256)
-    # r1 = sampler.std - np.min(sampler.std)
-    # cv2.imwrite(image_dir+'/rof_posterior_std.png',r1/np.max(r1)*256)
-    # r2 = sampler.var - np.min(sampler.var)
-    # cv2.imwrite(image_dir+'/rof_posterior_var.png',r2/np.max(r2)*256)
+    io.imwrite(results_dir+'/ground_truth.png',x*256)
+    io.imwrite(results_dir+'/noisy.png',y*256)
+    io.imwrite(results_dir+'/rof_map.png',u*256)
+    io.imwrite(results_dir+'/rof_posterior_mean.png',ipla.mean*256)
+    r1 = ipla.std - np.min(ipla.std)
+    io.imwrite(results_dir+'/rof_posterior_std.png',r1/np.max(r1)*256)
     
     
 #%% help function for calling from command line
