@@ -44,12 +44,23 @@ class inexact_pla():
         self.num_prox_its_total = 0
     
     def simulate(self, verbose=False):
-        if verbose: sys.stdout.write('run innexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
+        if verbose: sys.stdout.write('run inexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
         while self.iter < self.n_iter:
             self.update()
             if verbose and self.iter%20==0: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(self.iter/self.n_iter*100)));
         if verbose > 0:
             sys.stdout.write('\n')
+            
+        if self.eff:
+            # once loop is done, compute mean and variance point estimates
+            N = self.n_iter-self.burnin
+            self.mean = self.sum/N
+            self.var = (self.sum_sq - (self.sum**2)/N)/(N-1)
+            self.std = np.sqrt(self.var)
+        else:
+            self.mean = np.mean(self.x[...,self.burnin+1:],axis=-1)
+            self.std = np.std(self.x[...,self.burnin+1:],axis=-1)
+            self.var = self.std**2
         
     def update(self):
         self.iter = self.iter + 1

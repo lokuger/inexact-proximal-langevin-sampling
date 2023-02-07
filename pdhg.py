@@ -35,7 +35,8 @@ class pdhg():
         self.h = h
         self.dh = h.grad
         
-        # allow a non-efficient form of the algorithm where all iterates are returned
+        # allow a non-efficient form of the algorithm where all iterates are returned, 
+        # to be able to compute errors or other diagnostics afterwards
         self.eff = efficient
         if self.eff:
             self.x = np.copy(x0)
@@ -64,9 +65,9 @@ class acc_pdhg():
     """solve the problem
         f(Kx) + g(x) + h(x)
     using an accelerated PDHG algorithm
-        x_{k+1} = prox_{tau*g}(x_k - tau*(dh(x_k) + Kt*y_k))
-        x_r = x_{k+1} + theta_k*(x_{k+1} - x_k)
+        x_r = x_k + theta_k*(x_k - x_{k-1})
         y_{k+1} = prox_{sigma*fconj}(y_k + sigma*K*x_r)
+        x_{k+1} = prox_{tau*g}(x_k - tau*(dh(x_k) + Kt*y_{k+1}))
     with differentiable h and possibly non-smooth f and g
     
     Acceleration based on the assumption that g is mu_g strongly convex and h 
@@ -75,7 +76,9 @@ class acc_pdhg():
     In Chambolle-Pock 2016, the analysis is based on the assumption that g is
     mu-strongly convex and h not strongly convex. This is equivalent, since we
     can shift the strongly convex part of h onto g and run the same algorithm
-    with a slightly different step size gamma that takes care of this adjustment.
+    with a slightly different step size.
+    For that reason adjust in every step the true steps gamma from the running 
+    step size tau (tau corresponds the step size tau in the paper)
     """
     def __init__(self, x0, y0, tau0, sigma0, n_iter, f, k, kt, g, mu_g, h, mu_h, efficient=True):
         self.iter = 0
