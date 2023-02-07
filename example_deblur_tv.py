@@ -10,12 +10,12 @@ import numpy as np
 from numpy.random import default_rng
 import matplotlib.pyplot as plt
 import sys, getopt, os
-from time import time
-from skimage import data, io, transform
+#from time import time
+from skimage import io, transform
 
 from inexact_pla import inexact_pla
-from sapg import sapg
-from pdhg import pdhg, acc_pdhg
+#from sapg import sapg
+from pdhg import pdhg#, acc_pdhg
 import potentials as pot
 import distributions as pds
 
@@ -119,7 +119,7 @@ def main():
     n = x.shape[0]
     
     tv = pot.total_variation(n, n, scale=1)
-    tv_groundtruth = tv(x)
+    #tv_groundtruth = tv(x)
     
     #%% Forward model & corrupted data
     blur_width = params['bandwidth']

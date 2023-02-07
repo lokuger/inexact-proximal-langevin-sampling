@@ -1,7 +1,5 @@
 import numpy as np
 from numpy.random import default_rng
-import matplotlib.pyplot as plt
-import ot
 import sys
 
 class inexact_pla():
