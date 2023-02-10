@@ -331,6 +331,7 @@ class total_variation():
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
                 # if verbose and (i%10 == 0 or stopcrit or i==max_iter):
                 #     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
+        if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
         return (u - self._imdiv(p)), i
         
     
