@@ -21,7 +21,7 @@ import distributions as pds
 #%% initial parameters: test image, computation settings etc.
 params = {
     'iterations': 1000,
-    'testfile_path': 'test_images/wheel.png',
+    'testfile_path': 'test_images/teddies.jpeg',
     'noise_std': 0.2,
     'logepsilon': -0.5,
     'efficient': True,
@@ -113,8 +113,8 @@ def main():
         
         #%% regularization parameter
         # mu_tv = s.mean_theta[-1]          # computed by SAPG
-        mu_tv = 3.56                        # set by hand, optimized for highest PSNR of MAP
-        
+        mu_tv = 4.3                        # set by hand, optimized for highest PSNR of MAP
+            
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
         u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
