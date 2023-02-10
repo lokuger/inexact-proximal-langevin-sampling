@@ -23,7 +23,7 @@ params = {
     'iterations': 1000,
     'testfile_path': 'test_images/wheel.png',
     'noise_std': 0.2,
-    'logepsilon': -1,
+    'logepsilon': -0.5,
     'efficient': True,
     'verbose': True
     }
@@ -166,7 +166,7 @@ def main():
         my_imshow(y, 'noisy image')
         my_imshow(u, 'MAP ROF')
         my_imshow(mn, 'posterior mean')
-        my_imshow(np.log10(std), 'posterior std',np.min(np.log10(std)),np.max(np.log10(std)))
+        my_imshow(np.log10(std), 'posterior std',-1.1,-0.5)
     
 #%% help function for calling from command line
 def print_help():
@@ -179,8 +179,6 @@ def print_help():
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
     print('    -e (--efficientOff): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
-    print('    -b (--blur=): Type of blurring. 0 = No blur, denoising only; 1 = Gaussian [default]; 2 = Uniform')
-    print('    -w (--width=): Bandwidth of blur, only applicable if blurtype > 0. For Gaussian, this is the std of the blur kernel, for uniform this is the size of the mask')
     print('    -s (--std=): Standard deviation of the noise added to the blurred image. The true image is always scaled to [0,1], so noise should be chosen accordingly depending on what blur type is used and how hard you want the problem to be. :)')
     print('    -l (--logepsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**logepsilon in verbose mode')
     print('    -v (--verbose): Verbose mode.')
@@ -190,7 +188,7 @@ if __name__ == '__main__':
     try:
         opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficientOff","blur=","width=","std=",
+                                    "efficientOff","std=",
                                     "logepsilon=","verbose"])
     except getopt.GetoptError:
         print_help()
@@ -206,12 +204,6 @@ if __name__ == '__main__':
             params['testfile_path'] = arg
         elif opt in ("-e","--efficientOff"):
             params['efficient'] = False
-        elif opt in ("-b", "--blur"):
-            if int(arg) == 0: params['blurtype'] = 'none'
-            elif int(arg) == 1: params['blurtype'] = 'gaussian'
-            elif int(arg) == 2: params['blurtype'] = 'uniform'
-        elif opt in ("-w", "--width"):
-            params['bandwidth'] = int(arg)
         elif opt in ("-s", "--std"):
             params['noise_std'] = float(arg)
         elif opt in ("-l", "--logepsilon"):
