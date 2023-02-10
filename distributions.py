@@ -86,8 +86,8 @@ class l2_deblur_tv():
         self.noise_std = noise_std
         self.mu_tv = mu_tv
         
-        self.f = pot.l2_loss_reconstruction_homoschedastic(y=y, sigma2=noise_std**2, a=a,at=at)
-        self.g = pot.total_variation(n1,n2,mu_tv) if mu_tv > 0 else pot.zero()
+        self.f = pot.l2_loss_reconstruction_homoschedastic(y=self.y, sigma2=self.noise_std**2, a=self.a, at=self.at)
+        self.g = pot.total_variation(n1,n2,self.mu_tv) if self.mu_tv > 0 else pot.zero()
     
     def pdf(self, x):
         raise NotImplementedError("Cannot compute the correct pdf because normalization constant is unknown. Please use .unscaled_pdf(x)")

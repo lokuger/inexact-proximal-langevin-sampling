@@ -296,10 +296,9 @@ class total_variation():
         tau_agd = 1
         t_agd = 0
         p_prev = np.copy(p)
+        
         if verbose: sys.stdout.write('run AGD on dual ROF model: {:3d}% '.format(0)); sys.stdout.flush()
-        # if checkAccuracy and verbose:
-        #     print('Run (backward) accelerated gradient descent on the dual ROF problem with gamma = {:.3e}'.format(gamma*self.scale))
-        #     print('|{:^11s}|{:^31s}|'.format('Iterate','D-Gap (stop if < {:.3e})'.format(epsilon)))
+        
         while i < max_iter and not stopcrit:
             i = i + 1
             t_agd_new = (1+np.sqrt(1+4*t_agd**2))/2
@@ -325,7 +324,8 @@ class total_variation():
                 dual_inadmissible = np.any(norm_dual_iterate > gamma*self.scale+1e-12)
                 dual = -np.Inf if dual_inadmissible else - h + np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
                 dgap = primal-dual
-                stopcrit = dgap < epsilon
+                if i == 1: C = dgap # after the first iteration set a reference constant to the duality gap. We solve the problem until dgap is smaller or equal C*epsilon. For epsilon=1 always do exactly 1 iteration
+                stopcrit = dgap <= C*epsilon
                 if dgap < 0: # for debugging purpose
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Jan 26 20:39:11 2023
+Created on Thu Feb 09 18:32:15 2023
 
 @author: lorenzkuger
 """
@@ -14,76 +14,21 @@ import sys, getopt, os
 from skimage import io, transform
 
 from inexact_pla import inexact_pla
-#from sapg import sapg
-from pdhg import pdhg#, acc_pdhg
+# from sapg import sapg
 import potentials as pot
 import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 500,
+    'iterations': 50,
     'testfile_path': 'test_images/wheel.png',
-    'blurtype': 'none',
-    'bandwidth': 15,
-    'noise_std': 0.1,
-    'logepsilon': 8,
+    'noise_std': 0.2,
+    'logepsilon': 0,
     'efficient': True,
     'verbose': True
     }
 
 #%% auxiliary functions
-def blur_unif(n, b):
-    """compute the blur operator a, its transpose a.t and the maximum eigenvalue 
-    of ata.
-    Carfeul, this assumes a quadratic n x n image
-    blur length b must be integer and << n to prevent severe ill-posedness"""
-    h = np.ones((1, b))
-    lh = h.shape[1]
-    h = h / np.sum(h)
-    h = np.pad(h, ((0,0), (0, n-b)), mode='constant')
-    h = np.roll(h, -int((lh-1)/2))
-    h = np.matmul(h.T, h)
-    H_FFT = np.fft.fft2(h)
-    HC_FFT = np.conj(H_FFT)
-    a = lambda x : np.real(np.fft.ifft2(H_FFT * np.fft.fft2(x)))
-    at = lambda x : np.real(np.fft.ifft2(HC_FFT * np.fft.fft2(x)))
-    ata = lambda x : np.real(np.fft.ifft2(H_FFT * HC_FFT * np.fft.fft2(x)))
-    max_eigval = power_method(ata, n, 1e-4, int(1e3))
-    return a,at,max_eigval
-
-def blur_gauss(n, sigma):
-    """compute the blur operator a, its transpose a.t and the maximum eigenvalue 
-    of ata.
-    Carfeul, this assumes a quadratic n x n image, with n even
-    blur standard dev is assumed to be given in #pixels"""
-    t = np.arange(-n/2+1,n/2+1)
-    h = np.exp(-t**2/(2*sigma**2))
-    h = h / np.sum(h)
-    h = np.roll(h, -int(n/2)+1)
-    h = h[np.newaxis,:] * h[:,np.newaxis]
-    H_FFT = np.fft.fft2(h)
-    HC_FFT = np.conj(H_FFT)
-    a = lambda x : np.real(np.fft.ifft2(H_FFT * np.fft.fft2(x)))
-    at = lambda x : np.real(np.fft.ifft2(HC_FFT * np.fft.fft2(x)))
-    ata = lambda x : np.real(np.fft.ifft2(H_FFT * HC_FFT * np.fft.fft2(x)))
-    max_eigval = power_method(ata, n, 1e-4, int(1e3))
-    return a,at,max_eigval
-    
-def power_method(ata, n, tol, max_iter, verbose=False):
-    """power method to compute the maximum eigenvalue of the linear op at*a"""
-    x = np.random.normal(size=(n,n))
-    x = x/np.linalg.norm(x.ravel())
-    val, val_old = 1, 1
-    for k in range(max_iter):
-        x = ata(x)
-        val = np.linalg.norm(x.ravel())
-        rel_var = np.abs(val-val_old)/val_old
-        val_old = val
-        x = x/val
-        if rel_var < tol:
-            break
-    return val
-
 def my_imshow(im, label, vmin=0, vmax=1):
     plt.imshow(im, cmap='Greys_r',vmin=vmin,vmax=vmax)
     plt.title(label)
@@ -93,18 +38,14 @@ def my_imshow(im, label, vmin=0, vmax=1):
 #%% Main method - generate results directories
 def main():
     if not os.path.exists('./results'): os.makedirs('./results')
-    if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
-    blur_dir = './results/deblur_tv/{}'.format(params['blurtype'])
-    if not os.path.exists(blur_dir): os.makedirs(blur_dir)
-    bandwidth_dir = blur_dir + '/blur{}'.format(params['bandwidth'])
-    if not os.path.exists(bandwidth_dir): os.makedirs(bandwidth_dir)
-    accuracy_dir = bandwidth_dir + '/logepsilon{}'.format(params['logepsilon'])
+    if not os.path.exists('./results/denoise_tv'): os.makedirs('./results/denoise_tv')
+    accuracy_dir = './results/denoise_tv/logepsilon{}'.format(params['logepsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
     results_dir = accuracy_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
     if not os.path.exists(results_dir): os.makedirs(results_dir)
         
     #%% Ground truth
-    rng = default_rng(34859)
+    rng = default_rng(6346534)
     verb = params['verbose']
     try:
         x = io.imread(params['testfile_path'],as_gray=True).astype(float)
@@ -119,45 +60,35 @@ def main():
     n = x.shape[0]
     
     tv = pot.total_variation(n, n, scale=1)
-    #tv_groundtruth = tv(x)
+    # tv_groundtruth = tv(x)
     
     #%% Forward model & corrupted data
-    blur_width = params['bandwidth']
-    if params['blurtype'] == 'gaussian': 
-        a,at,max_ev = blur_gauss(n,blur_width) 
-    elif params['blurtype'] == 'uniform':
-        a,at,max_ev = blur_unif(n,blur_width)
-    elif params['blurtype'] == 'none':
-        a,at,max_ev = lambda x : x, lambda x : x, 1
-    else:
-        print('Unknown blur type, aborting')
-        sys.exit()
+    # a,at,_ = lambda x : x, lambda x : x, 1
     
     noise_std = params['noise_std']
-    y = a(x) + noise_std*rng.normal(size=x.shape)
-    L = max_ev/noise_std**2
+    y = x + noise_std*rng.normal(size=x.shape)
+    L = 1/noise_std**2
     
     # show ground truth and corrupted image
     my_imshow(x, 'ground truth')
     my_imshow(y, 'noisy image')
     
     #%% SAPG - compute the optimal regularization parameter
-    # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
-    # # metaparameter of the posterior: L = Lipschitz constant of nabla F, necessary for stepsize
+    # unscaled_posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=1)
     
-    # theta0 = 1
+    # theta0 = 10
     # # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
     # # for blur=5 roughly 500 warm up iterations
     # # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
-    # s = sapg(iter_wu=25,iter_outer=60,iter_burnin=10,iter_inner=1,
-    #           tau=0.9/L,delta=lambda k: 0.2/(theta0*n**2)*(k+1)**(-0.8),
-    #           x0=x,theta0=theta0,theta_min=0.01,theta_max=1e2,
-    #           epsilon_prox=3e-2,pd=unscaled_posterior)
+    # s = sapg(iter_wu=200,iter_outer=400,iter_burnin=50,iter_inner=1,
+    #           tau=0.9/L,delta=lambda k: 10/(theta0*n**2)*(k+1)**(-0.8),
+    #           x0=x,theta0=theta0,theta_min=0.1,theta_max=1e3,
+    #           epsilon_prox=1e-2,pd=unscaled_posterior)
     # ###################### change initialization later : iter_wu back to 500, x0 back to y
     # s.simulate()
     # mu_tv = s.mean_theta[-1]
     
-    ##### -- plots to check that SAPG converged --
+    # #### -- plots to check that SAPG converged --
     # # log pi values during warm-up Markov chain
     # plt.plot(s.logpi_wu, label='log-likelihood warm-up samples')
     # plt.legend()
@@ -178,53 +109,24 @@ def main():
     
     #%% regularization parameter
     # mu_tv = s.mean_theta[-1]          # computed by SAPG
-    mu_tv = 10#2.5                         # set by hand
+    mu_tv = 3.56                        # set by hand, optimized for highest PSNR of MAP
     
-    #%% MAP computation - L2-TV deblurring
-    # deblur using PDHG in the version f(Kx) + g(x) + h(x) with smooth h
-    # splitting is f(Kx) = TV(x) and h(x) = smooth L2-data term, g = 0
-    # this matches example 5.7 - PD-explicit in Chambolle+Pock 2016
-    x0_pd, y0_pd = np.zeros(x.shape), np.zeros((2,)+x.shape)
-    tau_pd, sigma_pd = 1/(np.sqrt(8)+L), 1/np.sqrt(8)
-    n_iter_pd = 1000
-    f = pot.l2_l1_norm(n, n, scale=mu_tv)
-    k,kt = tv._imgrad, tv._imdiv
-    g = pot.zero()
-    h = pot.l2_loss_reconstruction_homoschedastic(y, noise_std**2, a, at)
-    pd = pdhg(x0_pd, y0_pd, tau_pd, sigma_pd, n_iter_pd, f, k, kt, g, h)
-    
+    #%% MAP computation - L2-TV denoising (ROF)
     if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-    u = pd.compute(verbose=True)
+    u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
     if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
     
-    # quicker than PDHG for the denoising-only case: use aGD on dual or aPDHG
-    # u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
-    
-    my_imshow(u,'MAP (PDHG, mu_TV = {:.1f})'.format(mu_tv))
-    print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+    my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
+    print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
     
     #%% sample using inexact PLA
-    x0 = np.copy(x)#np.zeros_like(x)
+    x0 = np.copy(y)
     tau = 1/L
     epsilon = 10**params['logepsilon']
     n_samples = params['iterations']
-    burnin = 50#200*blur_width if params['blurtype'] =='uniform' else 1000*blur_width # rough approximation to the necessary burn-in in our setting (empirically observed)
-    posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
+    burnin = 10 # burnin for denoising is usually short since noisy data is itself in region of high probability of the posterior
+    posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
     eff = params['efficient']
-    
-    ## test the posterior MAP since results are weird
-    # x_ista = np.copy(x0)
-    # tau_ista = tau
-    # n_ista = 500
-    # obj_ista = np.zeros((n_ista,))
-    # for i_ista in np.arange(n_ista):
-    #     y_ista = x_ista - tau_ista * posterior.f.grad(x_ista)
-    #     x_ista,_ = posterior.g.inexact_prox(y_ista, tau_ista, max_iter=20)
-    #     obj_ista[i_ista] = posterior.f(x_ista) + posterior.g(x_ista)
-    # my_imshow(x_ista,'ISTA MAP')
-    # plt.plot(obj_ista)
-    # plt.title('ISTA objective')
-    # plt.show()
     
     ipla = inexact_pla(x0, tau, epsilon, n_samples, burnin, posterior, rng=rng, efficient=eff)
     if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
@@ -235,9 +137,6 @@ def main():
     # diagnostic plot, making sure the sampler looks plausible
     plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
     plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
-    plt.show()
-    plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
-    plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
     plt.show()
     plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
     plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')

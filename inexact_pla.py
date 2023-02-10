@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.random import default_rng
 import sys
+import matplotlib.pyplot as plt
 
 class inexact_pla():
     """
@@ -45,9 +46,13 @@ class inexact_pla():
         if verbose: sys.stdout.write('run inexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
         while self.iter < self.n_iter:
             self.update()
+            if verbose and self.iter%500==0: 
+                plt.imshow(self.x,cmap='Greys_r',vmin=0,vmax=1)
+                plt.title('iterate {}'.format(self.iter))
+                plt.show()
             if verbose and self.iter%20==0: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(self.iter/self.n_iter*100))); sys.stdout.flush()
         if verbose > 0: sys.stdout.write('\n'); sys.stdout.flush()
-            
+        
         if self.eff:
             # once loop is done, compute mean and variance point estimates
             N = self.n_iter-self.burnin

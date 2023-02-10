@@ -83,11 +83,11 @@ class sapg():
     def simulate(self, return_all=False, verbose=1):
         if verbose:
             print('Running SAPG to determine optimal regularization parameter')
-            sys.stdout.write('Warming up Markov chain: {:3d}%'.format(0))
+            sys.stdout.write('SAPG - Warming up Markov chain: {:3d}%'.format(0))
             sys.stdout.flush()
         self.warmup(verbose)
         if verbose:
-            sys.stdout.write('\nRun SAPG: {:3d}%'.format(0))
+            sys.stdout.write('\nSAPG - Main iteration: {:3d}%'.format(0))
             sys.stdout.flush()
         while self.i_out < self.iter_outer:
             self.i_out += 1
@@ -107,7 +107,7 @@ class sapg():
             if self.prox_is_exact:
                 self.x = self.prox_g(y, gamma=self.tau*self.theta[0])
             else:
-                self.x, _ = self.prox_g(y, gamma=self.tau*self.theta[0], epsilon=self.eps_prox)
+                self.x, _ = self.prox_g(y, gamma=self.tau*self.theta[0], epsilon=self.eps_prox, max_iter=50)
             self.dfx = self.df(self.x)
             # monitor likelihood during warm-up to estimate burn-in time
             self.logpi_wu[self.i_wu-1] = - self.f(self.x) - self.theta[0]*self.g(self.x)
@@ -137,6 +137,6 @@ class sapg():
         if self.prox_is_exact:
             self.x = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1])
         else:
-            self.x, _ = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1], epsilon=self.eps_prox, max_iter=100)
+            self.x, _ = self.prox_g(y, gamma=self.tau*self.theta[self.i_out-1], epsilon=self.eps_prox, max_iter=50)
         self.dfx = self.df(self.x)
         
