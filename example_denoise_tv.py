@@ -23,7 +23,7 @@ params = {
     'iterations': 100000,
     'testfile_path': 'test_images/wheel.png',
     'noise_std': 0.2,
-    'logepsilon': 0,
+    'log_epsilon': 0,
     'log_step_scale': -1,
     'efficient': True,
     'verbose': True
@@ -40,11 +40,11 @@ def my_imshow(im, label, vmin=0, vmax=1):
 def main():
     if not os.path.exists('./results'): os.makedirs('./results')
     if not os.path.exists('./results/denoise_tv'): os.makedirs('./results/denoise_tv')
-    accuracy_dir = './results/denoise_tv/logepsilon{}'.format(params['logepsilon'])
+    accuracy_dir = './results/denoise_tv/log_epsilon{}'.format(params['log_epsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    step_scale_dir = './results/denoise_tv/logepsilon{}'.format(params['logepsilon'])
-    if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    sample_dir = accuracy_dir + '/{}samples'.format(params['iterations'])
+    step_scale_dir = accuracy_dir + '/logstepscale{}'.format(params['log'])
+    if not os.path.exists(step_scale_dir): os.makedirs(step_scale_dir)
+    sample_dir = step_scale_dir + '/{}samples'.format(params['iterations'])
     if not os.path.exists(sample_dir): os.makedirs(sample_dir)
     results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
     if not os.path.exists(results_dir): os.makedirs(results_dir)
@@ -129,8 +129,8 @@ def main():
         
         #%% sample using inexact PLA
         x0 = np.copy(y)
-        tau = .1/L
-        epsilon = 10**params['logepsilon']
+        tau = 10**params['log_step_scale'] * 1/L
+        epsilon = 10**params['log_epsilon']
         n_samples = params['iterations']
         burnin = 50 # burnin for denoising is usually short since noisy data is itself in region of high probability of the posterior
         posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
@@ -150,7 +150,7 @@ def main():
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         plt.show()
         
-        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['logepsilon']))
+        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
         my_imshow(ipla.mean[314:378,444:508],'sample mean details')
         logstd = np.log10(ipla.std)
         my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
@@ -199,10 +199,10 @@ def print_help():
     print('    -h (--help): Print help.')
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
-    print('    -e (--efficientOff): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
+    print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
     print('    -s (--std=): Standard deviation of the noise added to the blurred image. The true image is always scaled to [0,1], so noise should be chosen accordingly depending on what blur type is used and how hard you want the problem to be. :)')
-    print('    -l (--logepsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**logepsilon in verbose mode')
-    print('    -c (--logstepscale=): log-10 of constant to multiply maximum possible step size with')
+    print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
+    print('    -c (--log_step_scale=): log-10 of constant to multiply maximum possible step size with')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
@@ -210,8 +210,8 @@ if __name__ == '__main__':
     try:
         opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:c:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficientOff","std=",
-                                    "logepsilon=","logstepscale=","verbose"])
+                                    "efficient_off","std=",
+                                    "log_epsilon=","log_step_scale=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -224,13 +224,13 @@ if __name__ == '__main__':
             params['iterations'] = int(arg)
         elif opt in ("-f", "--testfile_path"):
             params['testfile_path'] = arg
-        elif opt in ("-e","--efficientOff"):
+        elif opt in ("-e","--efficient_off"):
             params['efficient'] = False
         elif opt in ("-s", "--std"):
             params['noise_std'] = float(arg)
-        elif opt in ("-l", "--logepsilon"):
-            params['logepsilon'] = int(arg)
-        elif opt in ["-c", "--logstepscale"]:
+        elif opt in ("-l", "--log_epsilon"):
+            params['log_epsilon'] = int(arg)
+        elif opt in ["-c", "--log_step_scale"]:
             params['log_step_scale'] = int(arg)
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
