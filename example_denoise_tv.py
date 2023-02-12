@@ -230,9 +230,9 @@ if __name__ == '__main__':
         elif opt in ("-s", "--std"):
             params['noise_std'] = float(arg)
         elif opt in ("-l", "--log_epsilon"):
-            params['log_epsilon'] = int(arg)
+            params['log_epsilon'] = float(arg)
         elif opt in ["-c", "--log_step_scale"]:
-            params['log_step_scale'] = int(arg)
+            params['log_step_scale'] = float(arg)
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()
