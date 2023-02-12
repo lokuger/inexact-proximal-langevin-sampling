@@ -20,11 +20,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
+    'iterations': 100000,
     'testfile_path': 'test_images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': 0,
-    'log_step_scale': 0,
+    'log_epsilon': 0.0,
+    'step': 'large',
     'efficient': True,
     'verbose': True
     }
@@ -42,9 +42,9 @@ def main():
     if not os.path.exists('./results/denoise_tv'): os.makedirs('./results/denoise_tv')
     accuracy_dir = './results/denoise_tv/log_epsilon{}'.format(params['log_epsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    step_scale_dir = accuracy_dir + '/log_step_scale{}'.format(params['log_step_scale'])
-    if not os.path.exists(step_scale_dir): os.makedirs(step_scale_dir)
-    sample_dir = step_scale_dir + '/{}samples'.format(params['iterations'])
+    step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
+    if not os.path.exists(step_dir): os.makedirs(step_dir)
+    sample_dir = step_dir + '/{}samples'.format(params['iterations'])
     if not os.path.exists(sample_dir): os.makedirs(sample_dir)
     results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
     if not os.path.exists(results_dir): os.makedirs(results_dir)
@@ -129,7 +129,11 @@ def main():
         
         #%% sample using inexact PLA
         x0 = np.copy(y)
-        tau = 10**params['log_step_scale'] * 1/L
+        if params['step'] == 'large':
+            tau = 1/L
+        elif params['step'] == 'small':
+            tau = 0.5/L
+        
         epsilon = 10**params['log_epsilon']
         n_samples = params['iterations']
         burnin = 50 # burnin for denoising is usually short since noisy data is itself in region of high probability of the posterior
@@ -173,14 +177,14 @@ def main():
         # my_imshow(u, 'MAP ROF')
         # my_imshow(mn, 'posterior mean')
         logstd = np.log10(std)
-        my_imshow(logstd, 'posterior std',np.min(logstd),np.max(logstd))
+        # my_imshow(logstd, 'posterior std',-1.15,-0.6)
         
         # image details for paper close-up
         # my_imshow(x[314:378,444:508],'truth details')
         # my_imshow(y[314:378,444:508],'noisy details')
         # my_imshow(u[314:378,444:508],'MAP details')
-        # my_imshow(mn[314:378,444:508],'mean details')
-        # my_imshow(logstd[314:378,444:508],'std details', -1.15,-0.6)
+        my_imshow(mn[314:378,444:508],'mean details')
+        my_imshow(logstd[314:378,444:508],'std details', -1.15,-0.6)
         # r = (logstd-(-1.15))/0.55
         print('Posterior mean PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         # io.imsave(results_dir+'/posterior_logstd.png',np.clip(r*256,0,255).astype(np.uint8))
@@ -201,9 +205,8 @@ def print_help():
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
     print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
-    print('    -s (--std=): Standard deviation of the noise added to the blurred image. The true image is always scaled to [0,1], so noise should be chosen accordingly depending on what blur type is used and how hard you want the problem to be. :)')
     print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
-    print('    -c (--log_step_scale=): log-10 of constant to multiply maximum possible step size with')
+    print('    -s (--step=): \'large\' for 1/L or \'small\' for 0.5/L')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
@@ -227,12 +230,10 @@ if __name__ == '__main__':
             params['testfile_path'] = arg
         elif opt in ("-e","--efficient_off"):
             params['efficient'] = False
-        elif opt in ("-s", "--std"):
-            params['noise_std'] = float(arg)
         elif opt in ("-l", "--log_epsilon"):
             params['log_epsilon'] = float(arg)
-        elif opt in ["-c", "--log_step_scale"]:
-            params['log_step_scale'] = float(arg)
+        elif opt in ["-c", "--step="]:
+            params['step'] = arg
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()

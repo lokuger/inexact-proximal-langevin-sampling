@@ -21,12 +21,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 500,
+    'iterations': 20000,
     'testfile_path': 'test_images/wheel.png',
-    'blurtype': 'none',
-    'bandwidth': 15,
-    'noise_std': 0.1,
-    'logepsilon': 8,
+    'blurtype': 'gaussian',
+    'bandwidth': 1.5,
+    'noise_std': 0.005,
+    'log_epsilon': -1.5,
+    'log_step_scale': 0,
     'efficient': True,
     'verbose': True
     }
@@ -94,168 +95,182 @@ def my_imshow(im, label, vmin=0, vmax=1):
 def main():
     if not os.path.exists('./results'): os.makedirs('./results')
     if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
-    blur_dir = './results/deblur_tv/{}'.format(params['blurtype'])
-    if not os.path.exists(blur_dir): os.makedirs(blur_dir)
-    bandwidth_dir = blur_dir + '/blur{}'.format(params['bandwidth'])
-    if not os.path.exists(bandwidth_dir): os.makedirs(bandwidth_dir)
-    accuracy_dir = bandwidth_dir + '/logepsilon{}'.format(params['logepsilon'])
+    accuracy_dir = './results/deblur_tv/log_epsilon{}'.format(params['log_epsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    results_dir = accuracy_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
+    step_scale_dir = accuracy_dir + '/log_step_scale{}'.format(params['log_step_scale'])
+    if not os.path.exists(step_scale_dir): os.makedirs(step_scale_dir)
+    sample_dir = step_scale_dir + '/{}samples'.format(params['iterations'])
+    if not os.path.exists(sample_dir): os.makedirs(sample_dir)
+    results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
     if not os.path.exists(results_dir): os.makedirs(results_dir)
         
     #%% Ground truth
-    rng = default_rng(34859)
-    verb = params['verbose']
-    try:
-        x = io.imread(params['testfile_path'],as_gray=True).astype(float)
-    except FileNotFoundError:
-        print('Provided test image did not exist under that path, aborting.')
-        sys.exit()
-    # handle images that are too large or colored
-    if x.shape[0] > 512 or x.shape[1] > 512: x = transform.resize(x, (512,512))
-    x = x-np.min(x)
-    x = x/np.max(x)
-    # assume quadratic images
-    n = x.shape[0]
-    
-    tv = pot.total_variation(n, n, scale=1)
-    #tv_groundtruth = tv(x)
-    
-    #%% Forward model & corrupted data
-    blur_width = params['bandwidth']
-    if params['blurtype'] == 'gaussian': 
-        a,at,max_ev = blur_gauss(n,blur_width) 
-    elif params['blurtype'] == 'uniform':
-        a,at,max_ev = blur_unif(n,blur_width)
-    elif params['blurtype'] == 'none':
-        a,at,max_ev = lambda x : x, lambda x : x, 1
+    results_file = results_dir+'/result_images.npy'
+    if not os.path.exists(results_file): 
+        rng = default_rng(34859)
+        verb = params['verbose']
+        try:
+            x = io.imread(params['testfile_path'],as_gray=True).astype(float)
+        except FileNotFoundError:
+            print('Provided test image did not exist under that path, aborting.')
+            sys.exit()
+        # handle images that are too large or colored
+        if x.shape[0] > 512 or x.shape[1] > 512: x = transform.resize(x, (512,512))
+        x = x-np.min(x)
+        x = x/np.max(x)
+        # assume quadratic images
+        n = x.shape[0]
+        
+        tv = pot.total_variation(n, n, scale=1)
+        #tv_groundtruth = tv(x)
+        
+        #%% Forward model & corrupted data
+        blur_width = params['bandwidth']
+        if params['blurtype'] == 'gaussian': 
+            a,at,max_ev = blur_gauss(n,blur_width) 
+        elif params['blurtype'] == 'uniform':
+            a,at,max_ev = blur_unif(n,blur_width)
+        elif params['blurtype'] == 'none':
+            a,at,max_ev = lambda x : x, lambda x : x, 1
+        else:
+            print('Unknown blur type, aborting')
+            sys.exit()
+        
+        noise_std = params['noise_std']
+        y = a(x) + noise_std*rng.normal(size=x.shape)
+        L = max_ev/noise_std**2
+        
+        # show ground truth and corrupted image
+        my_imshow(x, 'ground truth')
+        my_imshow(x[314:378,444:508],'truth details')
+        my_imshow(y, 'noisy image')
+        my_imshow(y[314:378,444:508],'noisy details')
+        
+        #%% SAPG - compute the optimal regularization parameter
+        # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
+        # # metaparameter of the posterior: L = Lipschitz constant of nabla F, necessary for stepsize
+        
+        # theta0 = 1
+        # # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
+        # # for blur=5 roughly 500 warm up iterations
+        # # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
+        # s = sapg(iter_wu=25,iter_outer=60,iter_burnin=10,iter_inner=1,
+        #           tau=0.9/L,delta=lambda k: 0.2/(theta0*n**2)*(k+1)**(-0.8),
+        #           x0=x,theta0=theta0,theta_min=0.01,theta_max=1e2,
+        #           epsilon_prox=3e-2,pd=unscaled_posterior)
+        # ###################### change initialization later : iter_wu back to 500, x0 back to y
+        # s.simulate()
+        # mu_tv = s.mean_theta[-1]
+        
+        ##### -- plots to check that SAPG converged --
+        # # log pi values during warm-up Markov chain
+        # plt.plot(s.logpi_wu, label='log-likelihood warm-up samples')
+        # plt.legend()
+        # plt.show()
+        
+        # # thetas
+        # plt.plot(s.theta,label='theta_n')
+        # plt.plot(n**2/s.mean_g, label='dim/g(u_n)', color='orange')
+        # plt.plot(np.arange(s.iter_burnin+1,s.iter_outer+1), s.mean_theta, label='theta_bar',color='green')
+        # plt.legend()
+        # plt.show()
+        
+        # # values g(X_n)
+        # plt.plot(s.mean_g, label='g(u_n)')
+        # plt.hlines(tv_groundtruth,0,len(s.mean_g)+1, label='g(u_true)')
+        # plt.legend()
+        # plt.show()
+        
+        #%% regularization parameter
+        # mu_tv = s.mean_theta[-1]          # computed by SAPG
+        mu_tv = 1                       # set by hand
+            
+        #%% MAP computation - L2-TV deblurring
+        # deblur using PDHG in the version f(Kx) + g(x) + h(x) with smooth h
+        # splitting is f(Kx) = TV(x) and h(x) = smooth L2-data term, g = 0
+        # this matches example 5.7 - PD-explicit in Chambolle+Pock 2016
+        x0_pd, y0_pd = np.zeros(x.shape), np.zeros((2,)+x.shape)
+        tau_pd, sigma_pd = 1/(np.sqrt(8)+L), 1/np.sqrt(8)
+        n_iter_pd = 1000
+        f = pot.l2_l1_norm(n, n, scale=mu_tv)
+        k,kt = tv._imgrad, tv._imdiv
+        g = pot.zero()
+        h = pot.l2_loss_reconstruction_homoschedastic(y, noise_std**2, a, at)
+        pd = pdhg(x0_pd, y0_pd, tau_pd, sigma_pd, n_iter_pd, f, k, kt, g, h)
+        
+        if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
+        u = pd.compute(verbose=True)
+        if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
+        
+        # quicker than PDHG for the denoising-only case: use aGD on dual or aPDHG
+        # u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
+        
+        my_imshow(u,'MAP (PDHG, mu_TV = {:.1f})'.format(mu_tv))
+        print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+        my_imshow(u[314:378,444:508],'MAP details')
+            
+        #%% sample using inexact PLA
+        x0 = np.copy(x)#np.zeros_like(x)
+        tau = 10**params['log_step_scale'] * 1/L
+        epsilon = 10**params['log_epsilon']
+        n_samples = params['iterations']
+        burnin = 500
+        posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
+        eff = params['efficient']
+        
+        ipla = inexact_pla(x0, tau, epsilon, n_samples, burnin, posterior, rng=rng, efficient=eff)
+        if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
+        ipla.simulate(verbose=verb)
+        if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
+        
+        #%% plots
+        # diagnostic plot, making sure the sampler looks plausible
+        plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
+        plt.show()
+        plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        plt.show()
+        plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        plt.show()
+        
+        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
+        logstd = np.log10(ipla.std)
+        my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
+        print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
+        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
+        
+        #%% saving
+        io.imsave(results_dir+'/ground_truth.png',np.clip(x*256,0,255).astype(np.uint8))
+        io.imsave(results_dir+'/noisy.png',np.clip(y*256,0,255).astype(np.uint8))
+        io.imsave(results_dir+'/map.png',np.clip(u*256,0,255).astype(np.uint8))
+        io.imsave(results_dir+'/posterior_mean.png',np.clip(ipla.mean*256,0,255).astype(np.uint8))
+        r1 = ipla.std - np.min(ipla.std)
+        io.imsave(results_dir+'/posterior_std.png',np.clip(r1/np.max(r1)*256,0,255).astype(np.uint8))
     else:
-        print('Unknown blur type, aborting')
-        sys.exit()
-    
-    noise_std = params['noise_std']
-    y = a(x) + noise_std*rng.normal(size=x.shape)
-    L = max_ev/noise_std**2
-    
-    # show ground truth and corrupted image
-    my_imshow(x, 'ground truth')
-    my_imshow(y, 'noisy image')
-    
-    #%% SAPG - compute the optimal regularization parameter
-    # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
-    # # metaparameter of the posterior: L = Lipschitz constant of nabla F, necessary for stepsize
-    
-    # theta0 = 1
-    # # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
-    # # for blur=5 roughly 500 warm up iterations
-    # # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
-    # s = sapg(iter_wu=25,iter_outer=60,iter_burnin=10,iter_inner=1,
-    #           tau=0.9/L,delta=lambda k: 0.2/(theta0*n**2)*(k+1)**(-0.8),
-    #           x0=x,theta0=theta0,theta_min=0.01,theta_max=1e2,
-    #           epsilon_prox=3e-2,pd=unscaled_posterior)
-    # ###################### change initialization later : iter_wu back to 500, x0 back to y
-    # s.simulate()
-    # mu_tv = s.mean_theta[-1]
-    
-    ##### -- plots to check that SAPG converged --
-    # # log pi values during warm-up Markov chain
-    # plt.plot(s.logpi_wu, label='log-likelihood warm-up samples')
-    # plt.legend()
-    # plt.show()
-    
-    # # thetas
-    # plt.plot(s.theta,label='theta_n')
-    # plt.plot(n**2/s.mean_g, label='dim/g(u_n)', color='orange')
-    # plt.plot(np.arange(s.iter_burnin+1,s.iter_outer+1), s.mean_theta, label='theta_bar',color='green')
-    # plt.legend()
-    # plt.show()
-    
-    # # values g(X_n)
-    # plt.plot(s.mean_g, label='g(u_n)')
-    # plt.hlines(tv_groundtruth,0,len(s.mean_g)+1, label='g(u_true)')
-    # plt.legend()
-    # plt.show()
-    
-    #%% regularization parameter
-    # mu_tv = s.mean_theta[-1]          # computed by SAPG
-    mu_tv = 10#2.5                         # set by hand
-    
-    #%% MAP computation - L2-TV deblurring
-    # deblur using PDHG in the version f(Kx) + g(x) + h(x) with smooth h
-    # splitting is f(Kx) = TV(x) and h(x) = smooth L2-data term, g = 0
-    # this matches example 5.7 - PD-explicit in Chambolle+Pock 2016
-    x0_pd, y0_pd = np.zeros(x.shape), np.zeros((2,)+x.shape)
-    tau_pd, sigma_pd = 1/(np.sqrt(8)+L), 1/np.sqrt(8)
-    n_iter_pd = 1000
-    f = pot.l2_l1_norm(n, n, scale=mu_tv)
-    k,kt = tv._imgrad, tv._imdiv
-    g = pot.zero()
-    h = pot.l2_loss_reconstruction_homoschedastic(y, noise_std**2, a, at)
-    pd = pdhg(x0_pd, y0_pd, tau_pd, sigma_pd, n_iter_pd, f, k, kt, g, h)
-    
-    if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-    u = pd.compute(verbose=True)
-    if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
-    
-    # quicker than PDHG for the denoising-only case: use aGD on dual or aPDHG
-    # u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
-    
-    my_imshow(u,'MAP (PDHG, mu_TV = {:.1f})'.format(mu_tv))
-    print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
-    
-    #%% sample using inexact PLA
-    x0 = np.copy(x)#np.zeros_like(x)
-    tau = 1/L
-    epsilon = 10**params['logepsilon']
-    n_samples = params['iterations']
-    burnin = 50#200*blur_width if params['blurtype'] =='uniform' else 1000*blur_width # rough approximation to the necessary burn-in in our setting (empirically observed)
-    posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
-    eff = params['efficient']
-    
-    ## test the posterior MAP since results are weird
-    # x_ista = np.copy(x0)
-    # tau_ista = tau
-    # n_ista = 500
-    # obj_ista = np.zeros((n_ista,))
-    # for i_ista in np.arange(n_ista):
-    #     y_ista = x_ista - tau_ista * posterior.f.grad(x_ista)
-    #     x_ista,_ = posterior.g.inexact_prox(y_ista, tau_ista, max_iter=20)
-    #     obj_ista[i_ista] = posterior.f(x_ista) + posterior.g(x_ista)
-    # my_imshow(x_ista,'ISTA MAP')
-    # plt.plot(obj_ista)
-    # plt.title('ISTA objective')
-    # plt.show()
-    
-    ipla = inexact_pla(x0, tau, epsilon, n_samples, burnin, posterior, rng=rng, efficient=eff)
-    if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
-    ipla.simulate(verbose=verb)
-    if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
-    
-    #%% plots
-    # diagnostic plot, making sure the sampler looks plausible
-    plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
-    plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
-    plt.show()
-    plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
-    plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-    plt.show()
-    plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
-    plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-    plt.show()
-    
-    my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['logepsilon']))
-    logstd = np.log10(ipla.std)
-    my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
-    print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
-    print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
-    
-    #%% saving
-    io.imsave(results_dir+'/ground_truth.png',np.clip(x*256,0,255).astype(np.uint8))
-    io.imsave(results_dir+'/noisy.png',np.clip(y*256,0,255).astype(np.uint8))
-    io.imsave(results_dir+'/map.png',np.clip(u*256,0,255).astype(np.uint8))
-    io.imsave(results_dir+'/posterior_mean.png',np.clip(ipla.mean*256,0,255).astype(np.uint8))
-    r1 = ipla.std - np.min(ipla.std)
-    io.imsave(results_dir+'/posterior_std.png',np.clip(r1/np.max(r1)*256,0,255).astype(np.uint8))
+        x,y,u,mn,std = np.load(results_file)
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'noisy image')
+        # my_imshow(u, 'MAP ROF')
+        # my_imshow(mn, 'posterior mean')
+        logstd = np.log10(std)
+        my_imshow(logstd, 'posterior std',np.min(logstd),np.max(logstd))
+        
+        # image details for paper close-up
+        # my_imshow(x[314:378,444:508],'truth details')
+        # my_imshow(y[314:378,444:508],'noisy details')
+        # my_imshow(u[314:378,444:508],'MAP details')
+        # my_imshow(mn[314:378,444:508],'mean details')
+        # my_imshow(logstd[314:378,444:508],'std details', -1.15,-0.6)
+        # r = (logstd-(-1.15))/0.55
+        print('Posterior mean PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+        # io.imsave(results_dir+'/posterior_logstd.png',np.clip(r*256,0,255).astype(np.uint8))
+        # io.imsave(results_dir+'/ground_truth_detail.png',np.clip(x[314:378,444:508]*256, 0, 255).astype(np.uint8))
+        # io.imsave(results_dir+'/noisy_detail.png',np.clip(y[314:378,444:508]*256, 0, 255).astype(np.uint8))
+        # io.imsave(results_dir+'/map_detail.png',np.clip(u[314:378,444:508]*256, 0, 255).astype(np.uint8))
+        # io.imsave(results_dir+'/posterior_mean_detail.png',np.clip(mn[314:378,444:508]*256, 0, 255).astype(np.uint8))
+        # io.imsave(results_dir+'/posterior_logstd_detail.png',np.clip(r[314:378,444:508]*256,0,255).astype(np.uint8))
     
 #%% help function for calling from command line
 def print_help():
@@ -271,16 +286,17 @@ def print_help():
     print('    -b (--blur=): Type of blurring. 0 = No blur, denoising only; 1 = Gaussian [default]; 2 = Uniform')
     print('    -w (--width=): Bandwidth of blur, only applicable if blurtype > 0. For Gaussian, this is the std of the blur kernel, for uniform this is the size of the mask')
     print('    -s (--std=): Standard deviation of the noise added to the blurred image. The true image is always scaled to [0,1], so noise should be chosen accordingly depending on what blur type is used and how hard you want the problem to be. :)')
-    print('    -l (--logepsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**logepsilon in verbose mode')
+    print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
+    print('    -c (--log_step_scale=): log-10 of constant to multiply maximum possible step size with')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:c:v",
                                    ["help","iterations=","testfile_path=",
                                     "efficientOff","blur=","width=","std=",
-                                    "logepsilon=","verbose"])
+                                    "log_epsilon=","log_step_scale=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -303,8 +319,10 @@ if __name__ == '__main__':
             params['bandwidth'] = int(arg)
         elif opt in ("-s", "--std"):
             params['noise_std'] = float(arg)
-        elif opt in ("-l", "--logepsilon"):
-            params['logepsilon'] = int(arg)
+        elif opt in ("-l", "--log_epsilon"):
+            params['log_epsilon'] = float(arg)
+        elif opt in ["-c", "--log_step_scale"]:
+            params['log_step_scale'] = float(arg)
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()
