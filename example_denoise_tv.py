@@ -42,7 +42,7 @@ def main():
     if not os.path.exists('./results/denoise_tv'): os.makedirs('./results/denoise_tv')
     accuracy_dir = './results/denoise_tv/log_epsilon{}'.format(params['log_epsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    step_scale_dir = accuracy_dir + '/logstepscale{}'.format(params['log_step_scale'])
+    step_scale_dir = accuracy_dir + '/log_step_scale{}'.format(params['log_step_scale'])
     if not os.path.exists(step_scale_dir): os.makedirs(step_scale_dir)
     sample_dir = step_scale_dir + '/{}samples'.format(params['iterations'])
     if not os.path.exists(sample_dir): os.makedirs(sample_dir)
