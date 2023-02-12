@@ -21,13 +21,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 20000,
+    'iterations': 100000,
     'testfile_path': 'test_images/wheel.png',
     'blurtype': 'gaussian',
-    'bandwidth': 1.5,
-    'noise_std': 0.005,
-    'log_epsilon': -1.5,
-    'log_step_scale': 0,
+    'bandwidth': 3,
+    'noise_std': 0.01,
+    'log_epsilon': -2,
+    'step': 'large',
     'efficient': True,
     'verbose': True
     }
@@ -97,9 +97,9 @@ def main():
     if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
     accuracy_dir = './results/deblur_tv/log_epsilon{}'.format(params['log_epsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    step_scale_dir = accuracy_dir + '/log_step_scale{}'.format(params['log_step_scale'])
-    if not os.path.exists(step_scale_dir): os.makedirs(step_scale_dir)
-    sample_dir = step_scale_dir + '/{}samples'.format(params['iterations'])
+    step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
+    if not os.path.exists(step_dir): os.makedirs(step_dir)
+    sample_dir = step_dir + '/{}samples'.format(params['iterations'])
     if not os.path.exists(sample_dir): os.makedirs(sample_dir)
     results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
     if not os.path.exists(results_dir): os.makedirs(results_dir)
@@ -211,10 +211,13 @@ def main():
             
         #%% sample using inexact PLA
         x0 = np.copy(x)#np.zeros_like(x)
-        tau = 10**params['log_step_scale'] * 1/L
+        if params['step'] == 'large':
+            tau = 1/L
+        elif params['step'] == 'small':
+            tau = 0.5/L
         epsilon = 10**params['log_epsilon']
         n_samples = params['iterations']
-        burnin = 500
+        burnin = 50000
         posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
@@ -242,6 +245,7 @@ def main():
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
         #%% saving
+        np.save(results_file,(x,y,u,ipla.mean,ipla.std))
         io.imsave(results_dir+'/ground_truth.png',np.clip(x*256,0,255).astype(np.uint8))
         io.imsave(results_dir+'/noisy.png',np.clip(y*256,0,255).astype(np.uint8))
         io.imsave(results_dir+'/map.png',np.clip(u*256,0,255).astype(np.uint8))
@@ -283,20 +287,17 @@ def print_help():
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
     print('    -e (--efficientOff): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
-    print('    -b (--blur=): Type of blurring. 0 = No blur, denoising only; 1 = Gaussian [default]; 2 = Uniform')
-    print('    -w (--width=): Bandwidth of blur, only applicable if blurtype > 0. For Gaussian, this is the std of the blur kernel, for uniform this is the size of the mask')
-    print('    -s (--std=): Standard deviation of the noise added to the blurred image. The true image is always scaled to [0,1], so noise should be chosen accordingly depending on what blur type is used and how hard you want the problem to be. :)')
     print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
-    print('    -c (--log_step_scale=): log-10 of constant to multiply maximum possible step size with')
+    print('    -s (--step=): \'large\' for 1/L or \'small\' for 0.5/L')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:c:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:ebl:s:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficientOff","blur=","width=","std=",
-                                    "log_epsilon=","log_step_scale=","verbose"])
+                                    "efficientOff",
+                                    "log_epsilon=","step=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -311,18 +312,10 @@ if __name__ == '__main__':
             params['testfile_path'] = arg
         elif opt in ("-e","--efficientOff"):
             params['efficient'] = False
-        elif opt in ("-b", "--blur"):
-            if int(arg) == 0: params['blurtype'] = 'none'
-            elif int(arg) == 1: params['blurtype'] = 'gaussian'
-            elif int(arg) == 2: params['blurtype'] = 'uniform'
-        elif opt in ("-w", "--width"):
-            params['bandwidth'] = int(arg)
-        elif opt in ("-s", "--std"):
-            params['noise_std'] = float(arg)
         elif opt in ("-l", "--log_epsilon"):
             params['log_epsilon'] = float(arg)
-        elif opt in ["-c", "--log_step_scale"]:
-            params['log_step_scale'] = float(arg)
+        elif opt in ["-s", "--step="]:
+            params['step'] = arg
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()
