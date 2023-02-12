@@ -212,10 +212,10 @@ def print_help():
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:c:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:s:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficient_off","std=",
-                                    "log_epsilon=","log_step_scale=","verbose"])
+                                    "efficient_off","log_epsilon=","step=",
+                                    "verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -232,7 +232,7 @@ if __name__ == '__main__':
             params['efficient'] = False
         elif opt in ("-l", "--log_epsilon"):
             params['log_epsilon'] = float(arg)
-        elif opt in ["-c", "--step="]:
+        elif opt in ["-s", "--step="]:
             params['step'] = arg
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
