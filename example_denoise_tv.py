@@ -20,11 +20,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100000,
+    'iterations': 10000,
     'testfile_path': 'test_images/wheel.png',
     'noise_std': 0.2,
     'log_epsilon': 0,
-    'log_step_scale': -1,
+    'log_step_scale': 0,
     'efficient': True,
     'verbose': True
     }
@@ -120,7 +120,7 @@ def main():
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        u,its_map = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
+        u,its_map = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-8, max_iter=500, verbose=verb)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
@@ -168,20 +168,21 @@ def main():
         io.imsave(results_dir+'/posterior_std.png',np.clip(r1/np.max(r1)*256,0,255).astype(np.uint8))
     else:
         x,y,u,mn,std = np.load(results_file)
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'noisy image')
-        my_imshow(u, 'MAP ROF')
-        my_imshow(mn, 'posterior mean')
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'noisy image')
+        # my_imshow(u, 'MAP ROF')
+        # my_imshow(mn, 'posterior mean')
         logstd = np.log10(std)
-        # my_imshow(logstd, 'posterior std',np.min(logstd),np.max(logstd))
+        my_imshow(logstd, 'posterior std',np.min(logstd),np.max(logstd))
         
         # image details for paper close-up
-        my_imshow(x[314:378,444:508],'truth details')
-        my_imshow(y[314:378,444:508],'noisy details')
-        my_imshow(u[314:378,444:508],'MAP details')
-        my_imshow(mn[314:378,444:508],'mean details')
-        my_imshow(logstd[314:378,444:508],'std details', -1.15,-0.6)
-        r = (logstd-(-1.15))/0.55
+        # my_imshow(x[314:378,444:508],'truth details')
+        # my_imshow(y[314:378,444:508],'noisy details')
+        # my_imshow(u[314:378,444:508],'MAP details')
+        # my_imshow(mn[314:378,444:508],'mean details')
+        # my_imshow(logstd[314:378,444:508],'std details', -1.15,-0.6)
+        # r = (logstd-(-1.15))/0.55
+        print('Posterior mean PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         # io.imsave(results_dir+'/posterior_logstd.png',np.clip(r*256,0,255).astype(np.uint8))
         # io.imsave(results_dir+'/ground_truth_detail.png',np.clip(x[314:378,444:508]*256, 0, 255).astype(np.uint8))
         # io.imsave(results_dir+'/noisy_detail.png',np.clip(y[314:378,444:508]*256, 0, 255).astype(np.uint8))

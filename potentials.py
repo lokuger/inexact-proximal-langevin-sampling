@@ -296,6 +296,7 @@ class total_variation():
         tau_agd = 1
         t_agd = 0
         p_prev = np.copy(p)
+        if checkAccuracy: C = gamma * self(u)
         
         if verbose: sys.stdout.write('run AGD on dual ROF model: {:3d}% '.format(0)); sys.stdout.flush()
         
@@ -324,7 +325,6 @@ class total_variation():
                 dual_inadmissible = np.any(norm_dual_iterate > gamma*self.scale+1e-12)
                 dual = -np.Inf if dual_inadmissible else - h + np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
                 dgap = primal-dual
-                if i == 1: C = dgap # after the first iteration set a reference constant to the duality gap. We solve the problem until dgap is smaller or equal C*epsilon. For epsilon=1 always do exactly 1 iteration
                 stopcrit = dgap <= C*epsilon
                 if dgap < 0: # for debugging purpose
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
