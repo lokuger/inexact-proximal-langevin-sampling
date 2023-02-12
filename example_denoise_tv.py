@@ -20,10 +20,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 1000,
-    'testfile_path': 'test_images/teddies.jpeg',
+    'iterations': 100000,
+    'testfile_path': 'test_images/wheel.png',
     'noise_std': 0.2,
-    'logepsilon': -0.5,
+    'logepsilon': 0,
+    'log_step_scale': -1,
     'efficient': True,
     'verbose': True
     }
@@ -40,6 +41,8 @@ def main():
     if not os.path.exists('./results'): os.makedirs('./results')
     if not os.path.exists('./results/denoise_tv'): os.makedirs('./results/denoise_tv')
     accuracy_dir = './results/denoise_tv/logepsilon{}'.format(params['logepsilon'])
+    if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
+    step_scale_dir = './results/denoise_tv/logepsilon{}'.format(params['logepsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
     sample_dir = accuracy_dir + '/{}samples'.format(params['iterations'])
     if not os.path.exists(sample_dir): os.makedirs(sample_dir)
@@ -117,15 +120,16 @@ def main():
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
+        u,its_map = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
-        print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+        my_imshow(u[314:378,444:508],'MAP details')
+        print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its_map))
         
         #%% sample using inexact PLA
         x0 = np.copy(y)
-        tau = 1/L
+        tau = .1/L
         epsilon = 10**params['logepsilon']
         n_samples = params['iterations']
         burnin = 50 # burnin for denoising is usually short since noisy data is itself in region of high probability of the posterior
@@ -147,8 +151,10 @@ def main():
         plt.show()
         
         my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['logepsilon']))
+        my_imshow(ipla.mean[314:378,444:508],'sample mean details')
         logstd = np.log10(ipla.std)
         my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
+        my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
@@ -166,8 +172,23 @@ def main():
         my_imshow(y, 'noisy image')
         my_imshow(u, 'MAP ROF')
         my_imshow(mn, 'posterior mean')
-        my_imshow(np.log10(std), 'posterior std',-1.1,-0.5)
-    
+        logstd = np.log10(std)
+        # my_imshow(logstd, 'posterior std',np.min(logstd),np.max(logstd))
+        
+        # image details for paper close-up
+        my_imshow(x[314:378,444:508],'truth details')
+        my_imshow(y[314:378,444:508],'noisy details')
+        my_imshow(u[314:378,444:508],'MAP details')
+        my_imshow(mn[314:378,444:508],'mean details')
+        my_imshow(logstd[314:378,444:508],'std details', -1.15,-0.6)
+        r = (logstd-(-1.15))/0.55
+        # io.imsave(results_dir+'/posterior_logstd.png',np.clip(r*256,0,255).astype(np.uint8))
+        # io.imsave(results_dir+'/ground_truth_detail.png',np.clip(x[314:378,444:508]*256, 0, 255).astype(np.uint8))
+        # io.imsave(results_dir+'/noisy_detail.png',np.clip(y[314:378,444:508]*256, 0, 255).astype(np.uint8))
+        # io.imsave(results_dir+'/map_detail.png',np.clip(u[314:378,444:508]*256, 0, 255).astype(np.uint8))
+        # io.imsave(results_dir+'/posterior_mean_detail.png',np.clip(mn[314:378,444:508]*256, 0, 255).astype(np.uint8))
+        # io.imsave(results_dir+'/posterior_logstd_detail.png',np.clip(r[314:378,444:508]*256,0,255).astype(np.uint8))
+        
 #%% help function for calling from command line
 def print_help():
     print('<>'*39)
@@ -181,15 +202,16 @@ def print_help():
     print('    -e (--efficientOff): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
     print('    -s (--std=): Standard deviation of the noise added to the blurred image. The true image is always scaled to [0,1], so noise should be chosen accordingly depending on what blur type is used and how hard you want the problem to be. :)')
     print('    -l (--logepsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**logepsilon in verbose mode')
+    print('    -c (--logstepscale=): log-10 of constant to multiply maximum possible step size with')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:eb:w:s:l:c:v",
                                    ["help","iterations=","testfile_path=",
                                     "efficientOff","std=",
-                                    "logepsilon=","verbose"])
+                                    "logepsilon=","logstepscale=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -208,6 +230,8 @@ if __name__ == '__main__':
             params['noise_std'] = float(arg)
         elif opt in ("-l", "--logepsilon"):
             params['logepsilon'] = int(arg)
+        elif opt in ["-c", "--logstepscale"]:
+            params['log_step_scale'] = int(arg)
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()
