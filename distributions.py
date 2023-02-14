@@ -96,6 +96,37 @@ class l2_deblur_tv():
         """ compute the unscaled density, assuming x is n x n """
         return np.exp(-self.f(x)-self.g(x))
     
+class l2loss_l1prior():
+    """
+    Represents posterior for an L2/Gaussian data loss together with a 
+    sparsity/l1 prior:
+        
+        V(u) = F(u) + G(u) with
+        
+        F(u) = 1/(2*sigma^2) * ||u - y||_2^2,
+        G(u) = mu * ||u||_1
+    
+    __init__ input parameters:
+    n1, n2:     dimensions of image
+    y:          shift y in the l2-loss, shape (n1,n2)
+    noise_std:  standard deviation sigma of the l2-loss (noise model: 
+                homoschedastic errors with variance sigma^2)
+    mu_l1:      l1 regularization parameter
+    """
+    def __init__(self, y, noise_std=1, mu_l1=1):
+        self.y = y
+        self.noise_std = noise_std
+        self.mu_l1 = mu_l1
+        
+        self.f = pot.l2_loss_homoschedastic(y=self.y, sigma2=noise_std**2)
+        self.g = pot.l1_loss_unshifted_homoschedastic(mu_l1) if self.mu_l1 > 0 else pot.Zero()
+    
+    def pdf(self, x):
+        raise NotImplementedError("Cannot compute the correct pdf because normalization constant is unknown. Please use L2Loss_TVReg.unscaled_pdf()")
+        
+    def unscaled_pdf(self, x):
+        return np.exp(-self.f(x)-self.g(x))
+    
     
 # class MY_L2Loss_SparsityReg():
 #     """

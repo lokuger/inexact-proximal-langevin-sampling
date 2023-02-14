@@ -23,18 +23,28 @@ params = {
     'iterations': 100000,
     'testfile_path': 'test_images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': 0.0,
+    'log_epsilon': -3.0,
     'step': 'large',
     'efficient': True,
     'verbose': True
     }
 
 #%% auxiliary functions
-def my_imshow(im, label, vmin=0, vmax=1):
-    plt.imshow(im, cmap='Greys_r',vmin=vmin,vmax=vmax)
-    plt.title(label)
-    plt.colorbar()
-    plt.show()
+def my_imsave(im, filename, vmin=-0.02, vmax=1.02, cbar=False):
+    fig = plt.figure()
+    plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
+    q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
+    plt.axis('off')
+    if cbar: fig.colorbar(q)
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+    
+def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
+    fig = plt.figure()
+    plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
+    q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
+    plt.axis('off')
+    if cbar: fig.colorbar(q)
+    plt.show(bbox_inches='tight', pad_inches=0)
 
 #%% Main method - generate results directories
 def main():
@@ -123,8 +133,8 @@ def main():
         u,its_map = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-8, max_iter=500, verbose=verb)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
-        my_imshow(u[314:378,444:508],'MAP details')
+        # my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
+        # my_imshow(u[314:378,444:508],'MAP details')
         print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its_map))
         
         #%% sample using inexact PLA
@@ -154,45 +164,35 @@ def main():
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         plt.show()
         
-        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
-        my_imshow(ipla.mean[314:378,444:508],'sample mean details')
-        logstd = np.log10(ipla.std)
-        my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
-        my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
+        # my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
+        # my_imshow(ipla.mean[314:378,444:508],'sample mean details')
+        # logstd = np.log10(ipla.std)
+        # my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
+        # my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
         #%% saving
         np.save(results_file,(x,y,u,ipla.mean,ipla.std))
-        io.imsave(results_dir+'/ground_truth.png',np.clip(x*256,0,255).astype(np.uint8))
-        io.imsave(results_dir+'/noisy.png',np.clip(y*256,0,255).astype(np.uint8))
-        io.imsave(results_dir+'/map.png',np.clip(u*256,0,255).astype(np.uint8))
-        io.imsave(results_dir+'/posterior_mean.png',np.clip(ipla.mean*256,0,255).astype(np.uint8))
-        r1 = ipla.std - np.min(ipla.std)
-        io.imsave(results_dir+'/posterior_std.png',np.clip(r1/np.max(r1)*256,0,255).astype(np.uint8))
     else:
         x,y,u,mn,std = np.load(results_file)
-        # my_imshow(x, 'ground truth')
-        # my_imshow(y, 'noisy image')
-        # my_imshow(u, 'MAP ROF')
-        # my_imshow(mn, 'posterior mean')
         logstd = np.log10(std)
-        # my_imshow(logstd, 'posterior std',-1.15,-0.6)
+        my_imsave(x, results_dir+'/ground_truth.pdf')
+        my_imsave(y, results_dir+'/noisy.pdf')
+        my_imsave(u, results_dir+'/map.pdf')
+        my_imsave(mn, results_dir+'/posterior_mean.pdf')
+        my_imsave(logstd, results_dir+'/posterior_logstd.pdf',-1.15,-0.58)
+        my_imsave(u, results_dir+'/map_cbar.pdf',cbar=True)
+        my_imsave(mn, results_dir+'/posterior_mean_cbar.pdf',cbar=True)
+        my_imsave(logstd, results_dir+'/posterior_logstd_cbar.pdf',-1.15,-0.58,cbar=True)
+        print('PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # image details for paper close-up
-        # my_imshow(x[314:378,444:508],'truth details')
-        # my_imshow(y[314:378,444:508],'noisy details')
-        # my_imshow(u[314:378,444:508],'MAP details')
-        my_imshow(mn[314:378,444:508],'mean details')
-        my_imshow(logstd[314:378,444:508],'std details', -1.15,-0.6)
-        # r = (logstd-(-1.15))/0.55
-        print('Posterior mean PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
-        # io.imsave(results_dir+'/posterior_logstd.png',np.clip(r*256,0,255).astype(np.uint8))
-        # io.imsave(results_dir+'/ground_truth_detail.png',np.clip(x[314:378,444:508]*256, 0, 255).astype(np.uint8))
-        # io.imsave(results_dir+'/noisy_detail.png',np.clip(y[314:378,444:508]*256, 0, 255).astype(np.uint8))
-        # io.imsave(results_dir+'/map_detail.png',np.clip(u[314:378,444:508]*256, 0, 255).astype(np.uint8))
-        # io.imsave(results_dir+'/posterior_mean_detail.png',np.clip(mn[314:378,444:508]*256, 0, 255).astype(np.uint8))
-        # io.imsave(results_dir+'/posterior_logstd_detail.png',np.clip(r[314:378,444:508]*256,0,255).astype(np.uint8))
+        my_imsave(x[314:378,444:508],results_dir+'/ground_truth_detail.pdf')
+        my_imsave(y[314:378,444:508],results_dir+'/noisy_detail.pdf')
+        my_imsave(u[314:378,444:508],results_dir+'/map_detail.pdf')
+        my_imsave(mn[314:378,444:508],results_dir+'/posterior_mean_detail.pdf')
+        my_imsave(logstd[314:378,444:508],results_dir+'/posterior_logstd_detail.pdf', -1.15,-0.58)
         
 #%% help function for calling from command line
 def print_help():

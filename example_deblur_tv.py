@@ -21,12 +21,12 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100000,
+    'iterations': 100,
     'testfile_path': 'test_images/wheel.png',
     'blurtype': 'gaussian',
     'bandwidth': 3,
     'noise_std': 0.01,
-    'log_epsilon': -2,
+    'log_epsilon': -10.0,
     'step': 'large',
     'efficient': True,
     'verbose': True
@@ -85,28 +85,30 @@ def power_method(ata, n, tol, max_iter, verbose=False):
             break
     return val
 
-def my_imshow(im, label, vmin=0, vmax=1):
-    plt.imshow(im, cmap='Greys_r',vmin=vmin,vmax=vmax)
-    plt.title(label)
-    plt.colorbar()
-    plt.show()
+def my_imshow(im, name, vmin=0, vmax=1, cbar=False):
+    fig = plt.figure()
+    plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
+    q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
+    plt.axis('off')
+    if cbar: fig.colorbar(q)
+    plt.savefig(name, bbox_inches='tight', pad_inches=0)
 
 #%% Main method - generate results directories
 def main():
-    if not os.path.exists('./results'): os.makedirs('./results')
-    if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
-    accuracy_dir = './results/deblur_tv/log_epsilon{}'.format(params['log_epsilon'])
-    if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
-    if not os.path.exists(step_dir): os.makedirs(step_dir)
-    sample_dir = step_dir + '/{}samples'.format(params['iterations'])
-    if not os.path.exists(sample_dir): os.makedirs(sample_dir)
-    results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
-    if not os.path.exists(results_dir): os.makedirs(results_dir)
+    # if not os.path.exists('./results'): os.makedirs('./results')
+    # if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
+    # accuracy_dir = './results/deblur_tv/log_epsilon{}'.format(params['log_epsilon'])
+    # if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
+    # step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
+    # if not os.path.exists(step_dir): os.makedirs(step_dir)
+    # sample_dir = step_dir + '/{}samples'.format(params['iterations'])
+    # if not os.path.exists(sample_dir): os.makedirs(sample_dir)
+    # results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
+    # if not os.path.exists(results_dir): os.makedirs(results_dir)
         
     #%% Ground truth
-    results_file = results_dir+'/result_images.npy'
-    if not os.path.exists(results_file): 
+    results_file = 0#results_dir+'/result_images.npy'
+    if True: #not os.path.exists(results_file): 
         rng = default_rng(34859)
         verb = params['verbose']
         try:
@@ -141,10 +143,6 @@ def main():
         L = max_ev/noise_std**2
         
         # show ground truth and corrupted image
-        my_imshow(x, 'ground truth')
-        my_imshow(x[314:378,444:508],'truth details')
-        my_imshow(y, 'noisy image')
-        my_imshow(y[314:378,444:508],'noisy details')
         
         #%% SAPG - compute the optimal regularization parameter
         # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
@@ -202,12 +200,7 @@ def main():
         u = pd.compute(verbose=True)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        # quicker than PDHG for the denoising-only case: use aGD on dual or aPDHG
-        # u,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-5, max_iter=500, verbose=verb)
-        
-        my_imshow(u,'MAP (PDHG, mu_TV = {:.1f})'.format(mu_tv))
         print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
-        my_imshow(u[314:378,444:508],'MAP details')
             
         #%% sample using inexact PLA
         x0 = np.copy(x)#np.zeros_like(x)
@@ -217,7 +210,7 @@ def main():
             tau = 0.5/L
         epsilon = 10**params['log_epsilon']
         n_samples = params['iterations']
-        burnin = 50000
+        burnin = 50#50000
         posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
@@ -246,12 +239,6 @@ def main():
         
         #%% saving
         np.save(results_file,(x,y,u,ipla.mean,ipla.std))
-        io.imsave(results_dir+'/ground_truth.png',np.clip(x*256,0,255).astype(np.uint8))
-        io.imsave(results_dir+'/noisy.png',np.clip(y*256,0,255).astype(np.uint8))
-        io.imsave(results_dir+'/map.png',np.clip(u*256,0,255).astype(np.uint8))
-        io.imsave(results_dir+'/posterior_mean.png',np.clip(ipla.mean*256,0,255).astype(np.uint8))
-        r1 = ipla.std - np.min(ipla.std)
-        io.imsave(results_dir+'/posterior_std.png',np.clip(r1/np.max(r1)*256,0,255).astype(np.uint8))
     else:
         x,y,u,mn,std = np.load(results_file)
         # my_imshow(x, 'ground truth')
@@ -259,7 +246,7 @@ def main():
         # my_imshow(u, 'MAP ROF')
         # my_imshow(mn, 'posterior mean')
         logstd = np.log10(std)
-        my_imshow(logstd, 'posterior std',np.min(logstd),np.max(logstd))
+        my_imshow(logstd, 'posterior.pdf',np.min(logstd),np.max(logstd))
         
         # image details for paper close-up
         # my_imshow(x[314:378,444:508],'truth details')
@@ -294,7 +281,7 @@ def print_help():
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:ebl:s:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:s:v",
                                    ["help","iterations=","testfile_path=",
                                     "efficientOff",
                                     "log_epsilon=","step=","verbose"])
@@ -315,7 +302,11 @@ if __name__ == '__main__':
         elif opt in ("-l", "--log_epsilon"):
             params['log_epsilon'] = float(arg)
         elif opt in ["-s", "--step="]:
-            params['step'] = arg
+            if arg in ['large','small']:
+                params['step'] = arg
+            else:
+                print('Unknown step size specifier')
+                sys.exit()
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()

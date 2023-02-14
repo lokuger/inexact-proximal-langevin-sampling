@@ -93,6 +93,72 @@ class l1_loss_homoschedastic():
     def prox(self, x, gamma):
         return self.y + np.maximum(0, np.abs(x-self.y)-gamma/self.b)*np.sign(x-self.y)
 
+class l1_loss_unshifted_homoschedastic():
+    """
+    An l1 loss term that can be used as a prior
+    
+    F(x) = mu * ||x||_1
+    
+    Inputs: 
+        - mu:        scale parameter. 
+    The correspnding Laplace distribution Laplace(0,b) has variance 2*b^2
+    """
+    def __init__(self, scale):
+        self.scale = scale
+    
+    def __call__(self, x):
+        return self.scale*np.sum(np.abs(x))
+    
+    def grad(self, x):
+        raise NotImplementedError('L1 norm has no gradient')
+        
+    def prox(self, x, gamma):
+        return np.maximum(0, np.abs(x)-gamma*self.scale) * np.sign(x)
+    
+    def inexact_prox(self, u, gamma, epsilon):
+        """
+        deliberately compute the prox inexactly here. We want to use this to
+        compare the inexact version of the PGLA algorithm with the exact one.
+        Prox problem - primal form:
+            min_x {gamma*scale*||x||_1 + 1/2*||x-u||^2}
+        Dual problem:
+            max_{y : ||y||_infty <= gamma*scale}{-1/2*||y-u||^2} + 1/2*||u||^2
+        Hence solve argmin_{y : ||y||_infty <= gamma*scale}{1/2*||y-u||^2} by 
+        forward backward descent:
+            z^{k+1} = y^k - tau * (y^k - u)
+            y^{k+1} = proj_{||.||_infty <= gamma*scale}(z^{k+1})
+        Normally tau = 1 would converge in one step, we deliberately choose tau
+        too small, in order to ensure that the problem can be solved up to some
+        accuracy.
+        """
+        tau = 0.1
+        y = np.zeros_like(u)
+        stopcrit = False
+        
+        l = 1/2 * np.sum(u**2)
+        C = gamma*self(u)
+        i = 0
+        while not stopcrit:
+            i += 1
+            z = (1-tau)*y + tau*u
+            y = z/np.maximum(1,np.abs(z)/(self.scale*gamma))
+            
+            primal = 1/2*np.sum(y**2) + gamma*self(u-y)
+            dual = -1/2*np.sum((y-u)**2) + l
+            dgap = primal - dual
+            stopcrit = dgap <= C*epsilon
+        return u-y, i
+        
+    def conj(self, z):
+        if np.any(np.abs(z) > self.scale+1e-12):
+            return np.Inf
+        else:
+            return 0
+        
+    def conj_prox(self, p, gamma):
+        return p/np.maximum(1,np.abs(p)/self.scale)
+    
+
 # class L1loss_scaled():
 #     """
 #     symbolizes the L1-norm, weighted by a parameter scale. Used for 

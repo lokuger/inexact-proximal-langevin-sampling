@@ -36,7 +36,7 @@ class pxmala():
         we have to compute prox_{tau*g}(x_prop). Save these values for the next step
         since x_prop will be the new iterates x_{k+1}, this saves computations
     """
-    def __init__(self, x0, tau, n_iter, burnin, f, g):
+    def __init__(self, x0, tau, n_iter, burnin, pd, rng=None):
         self.n_iter = n_iter
         self.burnin = burnin
         self.iter = 0
@@ -46,9 +46,10 @@ class pxmala():
         self.x0 = np.copy(x0)
         self.x = np.zeros(self.shape_x+(self.n_iter+1,))
         self.x[...,0] = self.x0
-        self.f = f
-        self.df = self.f.grad
-        self.g = g
+        self.f = pd.f
+        self.df = pd.f.grad
+        self.dfx = self.df(self.x[...,0])
+        self.g = pd.g
         try:
             self.prox_is_exact = True
             self.prox_g = self.g.prox
@@ -58,7 +59,7 @@ class pxmala():
         # store current iterate's gradient and prox for efficiency reasons
         self.dfx = self.df(self.x[...,0])
         self.prox_val = self.prox(self.x[...,0],self.dfx)
-        self.rng = default_rng()
+        self.rng = rng if rng is not None else default_rng()
         
         # diagnostic checks
         self.logpi_vals = np.zeros((self.n_iter,))
@@ -86,7 +87,7 @@ class pxmala():
         s3 = - self.f(x_proposal) + self.g(x_proposal)
         s4 = + self.f(self.x[...,self.iter-1]) + self.g(self.x[:,:,self.iter-1])
         s = s1+s2+s3+s4
-        q = np.exp(s) ######### check signs again!
+        q = np.exp(s) 
         p = 1 if q == float('inf') else np.minimum(1,q)
         
         r = self.rng.binomial(1, p)

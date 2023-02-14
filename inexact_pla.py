@@ -75,7 +75,7 @@ class inexact_pla():
                 self.sum_sq = self.sum_sq + self.x**2
         else:
             self.x[...,self.iter], num_prox_its = self.inexact_prox_g(self.x[...,self.iter-1]-tau*self.dfx+np.sqrt(2*tau)*xi, tau, epsilon)
-            self.dfx = self.df(self.x)
+            self.dfx = self.df(self.x[...,self.iter])
             self.logpi_vals[self.iter-1] = self.f(self.x[...,self.iter]) + self.g(self.x[...,self.iter])
         
         self.num_prox_its_total += num_prox_its
