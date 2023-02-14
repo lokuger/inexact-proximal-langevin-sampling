@@ -22,7 +22,7 @@ import distributions as pds
 #%% initial parameters: test image, computation settings etc.
 params = {
     'iterations': 1000000,
-    'testfile_path': 'test_images/owl.jpeg',
+    'testfile_path': 'test_images/owl256.jpeg',
     'blurtype': 'gaussian',
     'bandwidth': 1.5,
     'noise_std': 0.001,
