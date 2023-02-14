@@ -24,7 +24,7 @@ params = {
     'iterations': 1000000,
     'testfile_path': 'test_images/owl256.jpeg',
     'blurtype': 'gaussian',
-    'bandwidth': 1.5,
+    'bandwidth': 3,
     'noise_std': 0.001,
     'log_epsilon': None,
     'iter_prox': 10,
