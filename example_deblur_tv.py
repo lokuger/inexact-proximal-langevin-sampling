@@ -21,13 +21,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 25000,
+    'iterations': 100000,
     'testfile_path': 'test_images/owl.jpeg',
     'blurtype': 'gaussian',
     'bandwidth': 1.5,
     'noise_std': 0.001,
     'log_epsilon': None,
-    'iter_prox': 50,
+    'iter_prox': 1,
     'step': 'large',
     'efficient': True,
     'verbose': True
@@ -106,7 +106,7 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
 def main():
     if not os.path.exists('./results'): os.makedirs('./results')
     if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
-    accuracy_dir = './results/deblur_tv/log_epsilon{}'.format(params['log_epsilon'])
+    accuracy_dir = './results/deblur_tv/{}prox_iters'.format(params['iter_prox'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
     step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
     if not os.path.exists(step_dir): os.makedirs(step_dir)
@@ -118,7 +118,7 @@ def main():
     #%% Ground truth
     results_file = results_dir+'/result_images.npy'
     if not os.path.exists(results_file): 
-        rng = default_rng(34859)
+        rng = default_rng(13928696)
         verb = params['verbose']
         try:
             x = io.imread(params['testfile_path'],as_gray=True).astype(float)
@@ -154,8 +154,8 @@ def main():
         L = max_ev/noise_std**2
         
         # show ground truth and corrupted image
-        my_imshow(x,'ground truth')
-        my_imshow(y,'noisy image')
+        # my_imshow(x,'ground truth')
+        # my_imshow(y,'noisy image')
         
         #%% SAPG - compute the optimal regularization parameter
         # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
@@ -213,7 +213,7 @@ def main():
         u = pd.compute(verbose=True)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        my_imshow(u,'MAP estimate')
+        # my_imshow(u,'MAP estimate')
         print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
             
         #%% sample using inexact PLA
@@ -236,41 +236,34 @@ def main():
         
         #%% plots
         # diagnostic plot, making sure the sampler looks plausible
-        plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
-        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
-        plt.show()
-        plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
-        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        plt.show()
-        plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
-        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        plt.show()
+        # plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
+        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
+        # plt.show()
+        # plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
+        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        # plt.show()
+        # plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
+        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        # plt.show()
         
-        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
-        logstd = np.log10(ipla.std)
-        my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
+        # my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
+        # logstd = np.log10(ipla.std)
+        # my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
         #%% saving
-        # np.save(results_file,(x,y,u,ipla.mean,ipla.std))
-        print('done')
+        np.save(results_file,(x,y,u,ipla.mean,ipla.std))
+        
     else:
+        #%% results were already computed, show images
         x,y,u,mn,std = np.load(results_file)
         my_imshow(x, 'ground truth')
         my_imshow(y, 'noisy image')
         my_imshow(u, 'MAP ROF')
         my_imshow(mn, 'posterior mean')
         logstd = np.log10(std)
-        my_imshow(logstd, 'posterior.pdf',np.min(logstd),np.max(logstd))
-        
-        # image details for paper close-up
-        my_imshow(x[314:378,444:508],'truth details')
-        my_imshow(y[314:378,444:508],'noisy details')
-        my_imshow(u[314:378,444:508],'MAP details')
-        my_imshow(mn[314:378,444:508],'mean details')
-        my_imshow(logstd[314:378,444:508],'std details', np.min(logstd), np.max(logstd),cbar=True)
-        # r = (logstd-(-1.15))/0.55
+        my_imshow(logstd, 'posterior logstd',np.min(logstd),np.max(logstd))
         print('Posterior mean PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         
