@@ -13,7 +13,7 @@ class inexact_pla():
         - epsilon   : prox accuracy, either a scalar or a handle of n as epsilon(n)
         - pd        : probability distribution, object of distributions.py
     """
-    def __init__(self, x0, tau, epsilon, n_iter, burnin, pd, rng=None, efficient=False):
+    def __init__(self, x0, tau, epsilon_prox, iter_prox, n_iter, burnin, pd, rng=None, efficient=False):
         self.n_iter = n_iter
         self.burnin = burnin
         self.iter = 0
@@ -36,7 +36,8 @@ class inexact_pla():
         self.inexact_prox_g = pd.g.inexact_prox
         self.rng = rng if rng is not None else default_rng()    # for reproducibility allow to pass rng
         self.tau = lambda n : tau if np.isscalar(tau) else tau
-        self.epsilon = lambda n : epsilon if np.isscalar(epsilon) else epsilon
+        self.epsilon_prox = lambda n : epsilon_prox if np.isscalar(epsilon_prox) else epsilon_prox
+        self.iter_prox = iter_prox
         
         # diagnostic checks
         self.logpi_vals = np.zeros((self.n_iter,))
@@ -64,17 +65,18 @@ class inexact_pla():
         self.iter = self.iter + 1
         xi = self.rng.normal(size=self.shape_x)
         tau = self.tau(self.iter)
-        epsilon = self.epsilon(self.iter)
+        epsilon_prox = self.epsilon_prox(self.iter) if self.epsilon_prox is not None else None
+        iter_prox = self.iter_prox
         
         if self.eff:
-            self.x, num_prox_its = self.inexact_prox_g(self.x-tau*self.dfx+np.sqrt(2*tau)*xi, tau, epsilon)
+            self.x, num_prox_its = self.inexact_prox_g(self.x-tau*self.dfx+np.sqrt(2*tau)*xi, tau, epsilon=epsilon_prox, max_iter=iter_prox)
             self.dfx = self.df(self.x)
             self.logpi_vals[self.iter-1] = self.f(self.x) + self.g(self.x)
             if self.iter > self.burnin:
                 self.sum = self.sum + self.x
                 self.sum_sq = self.sum_sq + self.x**2
         else:
-            self.x[...,self.iter], num_prox_its = self.inexact_prox_g(self.x[...,self.iter-1]-tau*self.dfx+np.sqrt(2*tau)*xi, tau, epsilon)
+            self.x[...,self.iter], num_prox_its = self.inexact_prox_g(self.x[...,self.iter-1]-tau*self.dfx+np.sqrt(2*tau)*xi, tau, epsilon=epsilon_prox, max_iter=iter_prox)
             self.dfx = self.df(self.x[...,self.iter])
             self.logpi_vals[self.iter-1] = self.f(self.x[...,self.iter]) + self.g(self.x[...,self.iter])
         

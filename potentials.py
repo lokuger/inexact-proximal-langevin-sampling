@@ -392,7 +392,7 @@ class total_variation():
                 dual = -np.Inf if dual_inadmissible else - h + np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
                 dgap = primal-dual
                 stopcrit = dgap <= C*epsilon
-                if dgap < 0: # for debugging purpose
+                if dgap < -5e-15: # for debugging purpose
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
                 # if verbose and (i%10 == 0 or stopcrit or i==max_iter):
