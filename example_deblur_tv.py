@@ -21,13 +21,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100000,
+    'iterations': 1000000,
     'testfile_path': 'test_images/owl.jpeg',
     'blurtype': 'gaussian',
     'bandwidth': 1.5,
     'noise_std': 0.001,
     'log_epsilon': None,
-    'iter_prox': 1,
+    'iter_prox': 10,
     'step': 'large',
     'efficient': True,
     'verbose': True
@@ -126,7 +126,7 @@ def main():
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
         # handle images that are too large
-        Nmax = 128
+        Nmax = 256
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         x = x-np.min(x)
         x = x/np.max(x)
@@ -258,13 +258,16 @@ def main():
     else:
         #%% results were already computed, show images
         x,y,u,mn,std = np.load(results_file)
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'noisy image')
-        my_imshow(u, 'MAP ROF')
-        my_imshow(mn, 'posterior mean')
         logstd = np.log10(std)
-        my_imshow(logstd, 'posterior logstd',np.min(logstd),np.max(logstd))
-        print('Posterior mean PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+        my_imsave(x, results_dir+'/ground_truth.pdf',-0.02,1.02)
+        my_imsave(y, results_dir+'/noisy.pdf',-0.02,1.02)
+        my_imsave(u, results_dir+'/map.pdf',-0.02,1.02)
+        my_imsave(mn, results_dir+'/posterior_mean.pdf',-0.02,1.02)
+        my_imsave(logstd, results_dir+'/posterior_logstd.pdf',-1.45,-0.98)
+        my_imsave(u, results_dir+'/map_cbar.pdf',-0.02,1.02,cbar=True)
+        my_imsave(mn, results_dir+'/posterior_mean_cbar.pdf',-0.02,1.02,cbar=True)
+        my_imsave(logstd, results_dir+'/posterior_logstd_cbar.pdf',-1.45,-0.98,cbar=True)
+        print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         
 #%% help function for calling from command line
