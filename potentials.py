@@ -115,7 +115,7 @@ class l1_loss_unshifted_homoschedastic():
     def prox(self, x, gamma):
         return np.maximum(0, np.abs(x)-gamma*self.scale) * np.sign(x)
     
-    def inexact_prox(self, u, gamma, epsilon):
+    def inexact_prox(self, u, gamma, epsilon, max_iter=np.Inf):
         """
         deliberately compute the prox inexactly here. We want to use this to
         compare the inexact version of the PGLA algorithm with the exact one.
@@ -123,30 +123,30 @@ class l1_loss_unshifted_homoschedastic():
             min_x {gamma*scale*||x||_1 + 1/2*||x-u||^2}
         Dual problem:
             max_{y : ||y||_infty <= gamma*scale}{-1/2*||y-u||^2} + 1/2*||u||^2
-        Hence solve argmin_{y : ||y||_infty <= gamma*scale}{1/2*||y-u||^2} by 
-        forward backward descent:
-            z^{k+1} = y^k - tau * (y^k - u)
-            y^{k+1} = proj_{||.||_infty <= gamma*scale}(z^{k+1})
-        Normally tau = 1 would converge in one step, we deliberately choose tau
-        too small, in order to ensure that the problem can be solved up to some
-        accuracy.
+        Hence solve argmin_{y : ||y||_infty <= gamma*scale}{1/2*||y-u||^2}:
+        The solution is the projection of u onto infty-ball of radius gamma*scale:
+            sol = gamma*self.scale/np.linalg.norm(u,np.Inf) * u
+        Just approximate this from below (inside the ball) by a sequence 
+            (1 - q^k) * sol
+        whick converges in norm as q^k, for some 0<q<1.
         """
-        tau = 0.1
-        y = np.zeros_like(u)
-        stopcrit = False
-        
+        # in order to track duality gap
         l = 1/2 * np.sum(u**2)
         C = gamma*self(u)
         i = 0
+        stopcrit = False
+        
+        # this is the true solution of the dual problem
+        sol = u / np.maximum(1,np.linalg.norm(u,np.Inf)/(gamma*self.scale))
+        q = 0.5
         while not stopcrit:
-            i += 1
-            z = (1-tau)*y + tau*u
-            y = z/np.maximum(1,np.abs(z)/(self.scale*gamma))
+            y = (1 - q**i)*sol
             
             primal = 1/2*np.sum(y**2) + gamma*self(u-y)
             dual = -1/2*np.sum((y-u)**2) + l
             dgap = primal - dual
             stopcrit = dgap <= C*epsilon
+            i += 1
         return u-y, i
         
     def conj(self, z):

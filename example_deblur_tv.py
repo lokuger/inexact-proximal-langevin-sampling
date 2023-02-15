@@ -154,8 +154,8 @@ def main():
         L = max_ev/noise_std**2
         
         # show ground truth and corrupted image
-        # my_imshow(x,'ground truth')
-        # my_imshow(y,'noisy image')
+        my_imshow(x,'ground truth')
+        my_imshow(y,'noisy image')
         
         #%% SAPG - compute the optimal regularization parameter
         # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
@@ -263,10 +263,10 @@ def main():
         my_imsave(y, results_dir+'/noisy.pdf',-0.02,1.02)
         my_imsave(u, results_dir+'/map.pdf',-0.02,1.02)
         my_imsave(mn, results_dir+'/posterior_mean.pdf',-0.02,1.02)
-        my_imsave(logstd, results_dir+'/posterior_logstd.pdf',-1.45,-0.98)
+        my_imsave(logstd, results_dir+'/posterior_logstd.pdf',-1.33,-0.83)
         my_imsave(u, results_dir+'/map_cbar.pdf',-0.02,1.02,cbar=True)
         my_imsave(mn, results_dir+'/posterior_mean_cbar.pdf',-0.02,1.02,cbar=True)
-        my_imsave(logstd, results_dir+'/posterior_logstd_cbar.pdf',-1.45,-0.98,cbar=True)
+        my_imsave(logstd, results_dir+'/posterior_logstd_cbar.pdf',-1.33,-0.83,cbar=True)
         print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         

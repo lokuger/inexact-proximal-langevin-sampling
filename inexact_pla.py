@@ -47,7 +47,10 @@ class inexact_pla():
         if verbose: sys.stdout.write('run inexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
         while self.iter < self.n_iter:
             self.update()
-            if verbose and self.iter%20==0: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(self.iter/self.n_iter*100))); sys.stdout.flush()
+            if verbose and self.iter%20==0: 
+                progress = int(self.iter/self.n_iter*100)
+                sys.stdout.write('\b'*5 + '{:3d}% '.format(progress))
+                sys.stdout.flush()
         if verbose > 0: sys.stdout.write('\n'); sys.stdout.flush()
         
         if self.eff:
