@@ -86,21 +86,24 @@ def power_method(ata, n, tol, max_iter, verbose=False):
             break
     return val
 
-def my_imsave(im, name, vmin=0, vmax=1, cbar=False):
-    fig = plt.figure()
-    plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
-    q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
-    plt.axis('off')
-    if cbar: fig.colorbar(q)
-    plt.savefig(name, bbox_inches='tight', pad_inches=0)
+def my_imsave(im, filename, vmin=-0.02, vmax=1.02):
+    im = np.clip(im,vmin,vmax)
+    im = np.clip((im-vmin)/(vmax-vmin) * 256,0,255).astype('uint8')
+    io.imsave(filename, im)
     
-def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
+def my_imshow(im, label, cbarfile, vmin=-0.02, vmax=1.02, cbar=False):
     fig = plt.figure()
     plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
     q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
     plt.axis('off')
     if cbar: fig.colorbar(q)
     plt.show()
+    
+    # # draw a new figure and replot the colorbar there
+    # fig,ax = plt.subplots(figsize=(2,3))
+    # plt.colorbar(q,ax=ax)
+    # ax.remove()
+    # plt.savefig(cbarfile,bbox_inches='tight')
 
 #%% Main method - generate results directories
 def main():
@@ -259,14 +262,17 @@ def main():
         #%% results were already computed, show images
         x,y,u,mn,std = np.load(results_file)
         logstd = np.log10(std)
-        my_imsave(x, results_dir+'/ground_truth.pdf',-0.02,1.02)
-        my_imsave(y, results_dir+'/noisy.pdf',-0.02,1.02)
-        my_imsave(u, results_dir+'/map.pdf',-0.02,1.02)
-        my_imsave(mn, results_dir+'/posterior_mean.pdf',-0.02,1.02)
-        my_imsave(logstd, results_dir+'/posterior_logstd.pdf',-1.33,-0.83)
-        my_imsave(u, results_dir+'/map_cbar.pdf',-0.02,1.02,cbar=True)
-        my_imsave(mn, results_dir+'/posterior_mean_cbar.pdf',-0.02,1.02,cbar=True)
-        my_imsave(logstd, results_dir+'/posterior_logstd_cbar.pdf',-1.33,-0.83,cbar=True)
+        # my_imsave(x, results_dir+'/ground_truth.png')
+        # my_imsave(y, results_dir+'/noisy.png')
+        # my_imsave(u, results_dir+'/map.png')
+        # my_imsave(mn, results_dir+'/posterior_mean.png')
+        # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.33,-0.83)
+        
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'blurred & noisy')
+        # my_imshow(u, 'map estimate')
+        my_imshow(mn, 'post. mean / mmse estimate', results_dir+'/cbar.pdf')
+        my_imshow(logstd, 'posterior log std',results_dir+'/cbar_std.pdf',-1.33,-0.83)
         print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         

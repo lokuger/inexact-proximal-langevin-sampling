@@ -18,6 +18,7 @@ class l2_loss_homoschedastic():
     def __init__(self, y, sigma2):
         self.y = y
         self.sigma2 = sigma2
+        self.L = 1/self.sigma2
     
     def __call__(self, x):
         return 1/(2*self.sigma2) * np.sum((x-self.y)**2)
@@ -49,11 +50,12 @@ class l2_loss_reconstruction_homoschedastic():
         - a:        forward operator A, given as callable a(x)
         - at:       transpose/adjoint of A. Given as callable at(y)
     """
-    def __init__(self, y, sigma2, a, at):
+    def __init__(self, y, sigma2, a, at, max_ev_ata):
         self.y = y
         self.sigma2 = sigma2
         self.a = a
         self.at = at
+        self.L = max_ev_ata/self.sigma2
     
     def __call__(self, x):
         """ 
@@ -115,7 +117,7 @@ class l1_loss_unshifted_homoschedastic():
     def prox(self, x, gamma):
         return np.maximum(0, np.abs(x)-gamma*self.scale) * np.sign(x)
     
-    def inexact_prox(self, u, gamma, epsilon, max_iter=np.Inf):
+    def inexact_prox(self, x, gamma, epsilon, max_iter=np.Inf):
         """
         deliberately compute the prox inexactly here. We want to use this to
         compare the inexact version of the PGLA algorithm with the exact one.
@@ -130,24 +132,24 @@ class l1_loss_unshifted_homoschedastic():
             (1 - q^k) * sol
         whick converges in norm as q^k, for some 0<q<1.
         """
-        # in order to track duality gap
-        l = 1/2 * np.sum(u**2)
-        C = gamma*self(u)
+        # auxiliaries for tracking duality gap
+        l = 1/2 * np.sum(x**2)
+        C = gamma*self(x)
         i = 0
         stopcrit = False
         
         # this is the true solution of the dual problem
-        sol = u / np.maximum(1,np.linalg.norm(u,np.Inf)/(gamma*self.scale))
+        sol = x / np.maximum(1,np.abs(x)/(gamma*self.scale))
         q = 0.5
         while not stopcrit:
             y = (1 - q**i)*sol
             
-            primal = 1/2*np.sum(y**2) + gamma*self(u-y)
-            dual = -1/2*np.sum((y-u)**2) + l
+            primal = 1/2*np.sum(y**2) + gamma*self(x-y)
+            dual = -1/2*np.sum((x-y)**2) + l
             dgap = primal - dual
             stopcrit = dgap <= C*epsilon
             i += 1
-        return u-y, i
+        return x-y, i
         
     def conj(self, z):
         if np.any(np.abs(z) > self.scale+1e-12):

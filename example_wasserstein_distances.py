@@ -31,7 +31,7 @@ step_factors = {
     'large': 1,
     'small': 0.5,
     'smaller': 0.25,
-    'tiny': 0.001
+    'tiny': 0.1
     }
 
 #%% auxiliary functions
