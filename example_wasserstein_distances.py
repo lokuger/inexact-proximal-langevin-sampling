@@ -20,8 +20,8 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations_pxmala': 10000,
-    'iterations_ipgla': 10000,
+    'iterations_pxmala': 5000,
+    'iterations_ipgla': 5000,
     'runs': 1,
     'step': 'tiny',
     'verbose': True,
@@ -31,13 +31,14 @@ step_factors = {
     'large': 1,
     'small': 0.5,
     'smaller': 0.25,
-    'tiny': 0.1
+    'tiny': 0.01
     }
 
 #%% auxiliary functions
 def create_image(n1,n2,l1scale,noise_std,rng):
     verb = params['verbose']
     x = rng.laplace(scale=l1scale, size=(n1,n2))
+    x = (x-np.min(x))/(np.max(x)-np.min(x))
     y = x + noise_std*rng.normal(size=x.shape)
     
     if verb: sys.stdout.write('Compute l2-l1 MAP - '); sys.stdout.flush()
@@ -59,11 +60,10 @@ def main():
         rng = default_rng(28757)
         verb = params['verbose']
         
-        n1, n2 = 1,1
+        n1, n2 = 3,3
         l1scale = 0.5
         noise_std = 0.02
         L = 1/noise_std**2
-        
         
         T, T_burnin = 2, 1
         n_runs = params['runs']
@@ -71,8 +71,8 @@ def main():
         tau_ipgla = 1/L * step_factors[params['step']]
         
         # to test different levels of epsilon
-        n_epsilons = 3
-        log_epsilons = np.linspace(0.0,-2.0,n_epsilons)
+        n_epsilons = 5
+        log_epsilons = np.linspace(0.0,-4.0,n_epsilons)
         epsilons = 10. ** log_epsilons
         Wd = np.zeros((n_epsilons,n_runs))
         
@@ -88,17 +88,17 @@ def main():
         ax1.set_xlabel(r'$\epsilon$')
         ax1.set_yscale("log")
         ax1.set_ylabel(r'$\mathcal{W}_2^2(\bar{\mu}_N^{\mathrm{PDLA}},\mu^{\mathrm{MH}}_{M})$')
-        ax1.set_xlim(0.1,1)
+        ax1.set_xlim(0.5*np.min(epsilons),2*np.max(epsilons))
         for i_run in np.arange(n_runs):
             print('Run #{}'.format(i_run+1))
             x_true, x_noisy, x_l2l1map = create_image(n1, n2, l1scale, noise_std, rng)
             
             #%% sample using PxMALA
-            x0_pxmala = np.copy(x_noisy)
-            tau_pxmala = 8e-4 # tune this by hand to achieve a satisfactory acceptance rate (roughly 50%-65%)
-            n_samples_pxmala = int(10*T/tau_pxmala)#params['iterations_pxmala']
-            burnin_pxmala = int(10*T_burnin/tau_pxmala)
-            posterior = pds.l2loss_l1prior(y=x_noisy, noise_std=noise_std, mu_l1=l1scale)
+            x0_pxmala = np.copy(x_l2l1map)
+            tau_pxmala = 6e-4 # tune this by hand to achieve a satisfactory acceptance rate (roughly 50%-65%)
+            n_samples_pxmala = params['iterations_pxmala']#int(10*T/tau_pxmala)
+            burnin_pxmala = 1000#int(10*T_burnin/tau_pxmala)
+            posterior = pds.l2_l1prior(y=x_noisy, noise_std=noise_std, mu_l1=l1scale)
             sampler_unbiased = pxmala(x0_pxmala, tau_pxmala, n_samples_pxmala, burnin_pxmala, pd=posterior, rng=rng)
         
             if verb: sys.stdout.write('Sample without bias from ROF posterior - '); sys.stdout.flush()
@@ -112,11 +112,11 @@ def main():
             for i_epsilon, epsilon_ipgla in enumerate(epsilons):
                 print('log10(epsilon) = {:.1f}'.format(np.log10(epsilon_ipgla)))
                 # print('tau = 1/L * 2^{:.1f}:'.format(np.log2(tau_ipgla*L)))
-                x0_ipgla = np.copy(x_noisy)
-                burnin_ipgla = int(T_burnin/tau_ipgla)
-                n_samples_ipgla = int(T/tau_ipgla) + burnin_ipgla #params['iterations_ipgla']
+                x0_ipgla = np.copy(x_l2l1map)
+                burnin_ipgla = 1000 #int(T_burnin/tau_ipgla)
+                n_samples_ipgla = params['iterations_ipgla'] #int(T/tau_ipgla) + burnin_ipgla
                 
-                sampler = inexact_pla(x0_ipgla, tau_ipgla, epsilon_ipgla, np.Inf, n_samples_ipgla, burnin_ipgla, posterior, rng=rng)
+                sampler = inexact_pla(x0_ipgla, n_samples_ipgla, burnin_ipgla, posterior, step_size=tau_ipgla, epsilon_prox=epsilon_ipgla, rng=rng)
                 if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
                 sampler.simulate(verbose=verb)
                 s_ipgla = np.reshape(sampler.x[...,burnin_ipgla:],(n1*n2,n_samples_ipgla-burnin_ipgla+1)).T
@@ -127,7 +127,7 @@ def main():
                     W = ot.emd2_1d(s_pxmala,s_ipgla)
                 else:
                     M = ot.dist(s_pxmala,s_ipgla)
-                    W = ot.emd2([],[],M) # empty lists indicate uniform weighting of the samples
+                    W = ot.emd2([],[],M,numItermax=int(1e6)) # empty lists indicate uniform weighting of the samples
                 # print('Time to compute distance matrix: {:.2f}s. Time to compute W2 distance: {:.2f}s'.format(time2-time1,time3-time2))
                 Wd[i_epsilon,i_run] = W
                 # print(W)
