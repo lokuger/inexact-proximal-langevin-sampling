@@ -20,7 +20,7 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 1000,
+    'iterations': 10000,
     'testfile_path': 'test_images/fibo2.jpeg',
     'blur_width': 15,
     'noise_std': 0.05,
@@ -158,7 +158,7 @@ def main():
         tau_ista = 1/posterior.f.L
         c_u = c_y
         if verb: sys.stdout.write('Run ISTA: {:3d}% '.format(0)); sys.stdout.flush()
-        iter_ista = 1000
+        iter_ista = 50
         while k < iter_ista:
             if verb: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(k/iter_ista*100))); sys.stdout.flush()
             k += 1
@@ -168,12 +168,6 @@ def main():
         
         my_imshow(u,'MAP (ISTA, mu_l1 = {:.2f})'.format(mu_l1))
         print('MAP: mu_l1 = {:.2f};\tPSNR: {:.4f}'.format(mu_l1,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
-        # my_imshow(im[314:378,444:508],'detail ground truth')
-        # my_imshow(y[314:378,444:508],'detail noisy')
-        # my_imshow(im_map[314:378,444:508],'detail MAP coeffs reconstruction')
-        # my_imshow(im[157:189,222:254],'detail ground truth')
-        # my_imshow(y[157:189,222:254],'detail noisy')
-        # my_imshow(im_map[157:189,222:254],'detail MAP')
         
         #%% sample Wavelet coefficients using inexact PLA
         c0 = np.copy(c_y)
@@ -207,33 +201,24 @@ def main():
         im_mmse = idwt(mmse_coeffs)
         my_imshow(im_mmse, 'MMSE coeffs, log10(epsilon)={}'.format(params['log_epsilon']))
         print('MMSE PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((im_mmse-x)**2))))
-        # my_imshow(im_mmse[314:378,444:508],'detail MMSE coeffs reconstruction')
-        # my_imshow(im_mmse[157:189,222:254],'detail MMSE coeffs reconstruction')
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
         #%% saving
-        np.save(results_file,(x,y,u,ipla.mean))
+        np.save(results_file,(x,y,u,im_mmse))
     else:
-        pass
-        # x,y,u,mn,std = np.load(results_file)
-        # logstd = np.log10(std)
-        # my_imsave(x, results_dir+'/ground_truth.pdf')
-        # my_imsave(y, results_dir+'/noisy.pdf')
-        # my_imsave(u, results_dir+'/map.pdf')
-        # my_imsave(mn, results_dir+'/posterior_mean.pdf')
-        # my_imsave(logstd, results_dir+'/posterior_logstd.pdf',-1.15,-0.58)
-        # my_imsave(u, results_dir+'/map_cbar.pdf',cbar=True)
-        # my_imsave(mn, results_dir+'/posterior_mean_cbar.pdf',cbar=True)
-        # my_imsave(logstd, results_dir+'/posterior_logstd_cbar.pdf',-1.15,-0.58,cbar=True)
-        # print('PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+        x,y,u,mn = np.load(results_file)
+        my_imshow(x, 'ground truth')
+        my_imshow(y, 'noisy')
+        my_imshow(u, 'map')
+        my_imshow(mn, 'mmse estimate, logeps={:.1f}'.format(params['log_epsilon']))
+        print('PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
-        # # image details for paper close-up
-        # my_imsave(x[314:378,444:508],results_dir+'/ground_truth_detail.pdf')
-        # my_imsave(y[314:378,444:508],results_dir+'/noisy_detail.pdf')
-        # my_imsave(u[314:378,444:508],results_dir+'/map_detail.pdf')
-        # my_imsave(mn[314:378,444:508],results_dir+'/posterior_mean_detail.pdf')
-        # my_imsave(logstd[314:378,444:508],results_dir+'/posterior_logstd_detail.pdf', -1.15,-0.58)
+        # image details for paper close-up
+        my_imsave(x,results_dir+'/ground_truth.png')
+        my_imsave(y,results_dir+'/noisy.png')
+        my_imsave(u,results_dir+'/map.png')
+        my_imsave(mn,results_dir+'/posterior_mean.png')
         
 #%% help function for calling from command line
 def print_help():
