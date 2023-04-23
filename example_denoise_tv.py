@@ -91,8 +91,8 @@ def main():
         L = 1/noise_std**2
         
         # show ground truth and corrupted image
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'noisy image')
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'noisy image')
         
         #%% SAPG - compute the optimal regularization parameter
         # unscaled_posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=1)
