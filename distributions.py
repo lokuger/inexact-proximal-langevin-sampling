@@ -128,6 +128,38 @@ class l2_l1prior():
     def unscaled_pdf(self, x):
         return np.exp(-self.f(x)-self.g(x))
     
+class l2_tikhprior():
+    """
+    Represents posterior for an L2/Gaussian data loss together with a 
+    sparsity/l1 prior:
+        
+        V(u) = F(u) + G(u) with
+        
+        F(u) = 1/(2*sigma1^2) * ||u - mu1||_2^2,
+        G(u) = 1/(2*sigma2^2) * ||u - mu2||_2^2
+    
+    __init__ input parameters:
+    n1, n2:     dimensions of image
+    mu1:        shift parameter of likelihood, shape (n1,n2)
+    mu2:        shift parameter of prior, shape (n1,n2)
+    sigma1:     standard deviation of likelihood
+    sigma2:     standard deviation of prior
+    """
+    def __init__(self, mu1=0, mu2=0, sigma1=1, sigma2=1):
+        self.mu1 = mu1
+        self.mu2 = mu2
+        self.sigma1 = sigma1
+        self.sigma2 = sigma2
+        
+        self.f = pot.l2_loss_homoschedastic(y=self.mu1, sigma2=self.sigma1**2)
+        self.g = pot.l2_loss_homoschedastic(y=self.mu2, sigma2=self.sigma2**2)
+    
+    def pdf(self, x):
+        raise NotImplementedError("Cannot compute the correct pdf because normalization constant is unknown. Please use L2Loss_TVReg.unscaled_pdf()")
+        
+    def unscaled_pdf(self, x):
+        return np.exp(-self.f(x)-self.g(x))
+    
 class l2_deblur_l1prior():
     """
     Represents posterior for an L2/Gaussian data loss, where the data is 

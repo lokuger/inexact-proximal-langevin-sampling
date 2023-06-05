@@ -21,11 +21,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 1000000,
-    'testfile_path': 'test_images/owl256.jpeg',
+    'iterations': 10000,
+    'testfile_path': 'test_images/flintstones.png',
     'blurtype': 'gaussian',
-    'bandwidth': 3,
-    'noise_std': 0.001,
+    'bandwidth': 1,
+    'noise_std': 0.20,
     'log_epsilon': None,
     'iter_prox': 10,
     'step': 'large',
@@ -91,7 +91,7 @@ def my_imsave(im, filename, vmin=-0.02, vmax=1.02):
     im = np.clip((im-vmin)/(vmax-vmin) * 256,0,255).astype('uint8')
     io.imsave(filename, im)
     
-def my_imshow(im, label, cbarfile, vmin=-0.02, vmax=1.02, cbar=False):
+def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
     fig = plt.figure()
     plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
     q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
@@ -107,30 +107,39 @@ def my_imshow(im, label, cbarfile, vmin=-0.02, vmax=1.02, cbar=False):
 
 #%% Main method - generate results directories
 def main():
-    if not os.path.exists('./results'): os.makedirs('./results')
-    if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
-    accuracy_dir = './results/deblur_tv/{}prox_iters'.format(params['iter_prox'])
-    if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
-    if not os.path.exists(step_dir): os.makedirs(step_dir)
-    sample_dir = step_dir + '/{}samples'.format(params['iterations'])
-    if not os.path.exists(sample_dir): os.makedirs(sample_dir)
-    results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
-    if not os.path.exists(results_dir): os.makedirs(results_dir)
+    # if not os.path.exists('./results'): os.makedirs('./results')
+    # if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
+    # accuracy_dir = './results/deblur_tv/{}prox_iters'.format(params['iter_prox'])
+    # if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
+    # step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
+    # if not os.path.exists(step_dir): os.makedirs(step_dir)
+    # sample_dir = step_dir + '/{}samples'.format(params['iterations'])
+    # if not os.path.exists(sample_dir): os.makedirs(sample_dir)
+    # results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
+    # if not os.path.exists(results_dir): os.makedirs(results_dir)
         
     #%% Ground truth
-    results_file = results_dir+'/result_images.npy'
-    if not os.path.exists(results_file): 
+    # results_file = results_dir+'/result_images.npy'
+    if True: #not os.path.exists(results_file): 
         rng = default_rng(13928696)
         verb = params['verbose']
-        try:
-            x = io.imread(params['testfile_path'],as_gray=True).astype(float)
-        except FileNotFoundError:
-            print('Provided test image did not exist under that path, aborting.')
-            sys.exit()
-        # handle images that are too large
-        Nmax = 256
-        if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
+        # try:
+        #     x = io.imread(params['testfile_path'],as_gray=True).astype(float)
+        # except FileNotFoundError:
+        #     print('Provided test image did not exist under that path, aborting.')
+        #     sys.exit()
+        # # handle images that are too large
+        # Nmax = 128
+        # if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
+        
+        # chess test image
+        n,t = 32, 8
+        x = np.zeros((n,n))
+        for i in np.arange(32):
+            for j in np.arange(32):
+                if (i//t)%2 == (j//t)%2:
+                    x[i,j] = 1
+        
         x = x-np.min(x)
         x = x/np.max(x)
 
@@ -143,22 +152,22 @@ def main():
         #%% Forward model & corrupted data
         blur_width = params['bandwidth']
         if params['blurtype'] == 'gaussian':
-            a,at,max_ev = blur_gauss(n,blur_width) 
+            a,at,max_ev_ata = blur_gauss(n,blur_width) 
         elif params['blurtype'] == 'uniform':
-            a,at,max_ev = blur_unif(n,blur_width)
+            a,at,max_ev_ata = blur_unif(n,blur_width)
         elif params['blurtype'] == 'none':
-            a,at,max_ev = lambda x : x, lambda x : x, 1
+            a,at,max_ev_ata = lambda x : x, lambda x : x, 1
         else:
             print('Unknown blur type, aborting')
             sys.exit()
         
         noise_std = params['noise_std']
         y = a(x) + noise_std*rng.normal(size=x.shape)
-        L = max_ev/noise_std**2
+        L = max_ev_ata/noise_std**2
         
         # show ground truth and corrupted image
-        my_imshow(x,'ground truth')
-        my_imshow(y,'noisy image')
+        # my_imshow(x,'ground truth')
+        # my_imshow(y,'noisy image')
         
         #%% SAPG - compute the optimal regularization parameter
         # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
@@ -197,7 +206,7 @@ def main():
         
         #%% regularization parameter
         # mu_tv = s.mean_theta[-1]          # computed by SAPG
-        mu_tv = 10                       # set by hand
+        mu_tv = 2.1                       # set by hand, tuned for best MAP PSNR
             
         #%% MAP computation - L2-TV deblurring
         # deblur using PDHG in the version f(Kx) + g(x) + h(x) with smooth h
@@ -209,7 +218,7 @@ def main():
         f = pot.l2_l1_norm(n, n, scale=mu_tv)
         k,kt = tv._imgrad, tv._imdiv
         g = pot.zero()
-        h = pot.l2_loss_reconstruction_homoschedastic(y, noise_std**2, a, at)
+        h = pot.l2_loss_reconstruction_homoschedastic(y, noise_std**2, a, at, max_ev_ata)
         pd = pdhg(x0_pd, y0_pd, tau_pd, sigma_pd, n_iter_pd, f, k, kt, g, h)
         
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
@@ -220,7 +229,7 @@ def main():
         print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
             
         #%% sample using inexact PLA
-        x0 = np.zeros_like(x)
+        x0 = np.copy(u) # np.zeros_like(x)
         if params['step'] == 'large':
             tau = 1/L
         elif params['step'] == 'small':
@@ -228,11 +237,12 @@ def main():
         iter_prox = params['iter_prox']
         epsilon_prox = 10**params['log_epsilon'] if params['log_epsilon'] is not None else None
         n_samples = params['iterations']
-        burnin = 5000
-        posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=mu_tv)
+        burnin = 1000
+        posterior = pds.l2_deblur_tv(n, n, a, at, max_ev_ata, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
-        ipla = inexact_pla(x0, tau, epsilon_prox, iter_prox, n_samples, burnin, posterior, rng=rng, efficient=eff)
+        #x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, exact=False
+        ipla = inexact_pla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
@@ -249,31 +259,31 @@ def main():
         # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         # plt.show()
         
-        # my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
-        # logstd = np.log10(ipla.std)
-        # my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
+        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
+        logstd = np.log10(ipla.std)
+        my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
         #%% saving
-        np.save(results_file,(x,y,u,ipla.mean,ipla.std))
+        # np.save(results_file,(x,y,u,ipla.mean,ipla.std))
         
-    else:
-        #%% results were already computed, show images
-        x,y,u,mn,std = np.load(results_file)
-        logstd = np.log10(std)
-        # my_imsave(x, results_dir+'/ground_truth.png')
-        # my_imsave(y, results_dir+'/noisy.png')
-        # my_imsave(u, results_dir+'/map.png')
-        # my_imsave(mn, results_dir+'/posterior_mean.png')
-        # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.33,-0.83)
+    # else:
+    #     #%% results were already computed, show images
+    #     x,y,u,mn,std = np.load(results_file)
+    #     logstd = np.log10(std)
+    #     # my_imsave(x, results_dir+'/ground_truth.png')
+    #     # my_imsave(y, results_dir+'/noisy.png')
+    #     # my_imsave(u, results_dir+'/map.png')
+    #     # my_imsave(mn, results_dir+'/posterior_mean.png')
+    #     # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.33,-0.83)
         
-        # my_imshow(x, 'ground truth')
-        # my_imshow(y, 'blurred & noisy')
-        # my_imshow(u, 'map estimate')
-        my_imshow(mn, 'post. mean / mmse estimate', results_dir+'/cbar.pdf')
-        my_imshow(logstd, 'posterior log std',results_dir+'/cbar_std.pdf',-1.33,-0.83)
-        print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+    #     # my_imshow(x, 'ground truth')
+    #     # my_imshow(y, 'blurred & noisy')
+    #     # my_imshow(u, 'map estimate')
+    #     my_imshow(mn, 'post. mean / mmse estimate', results_dir+'/cbar.pdf')
+    #     my_imshow(logstd, 'posterior log std',results_dir+'/cbar_std.pdf',-1.33,-0.83)
+    #     print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         
 #%% help function for calling from command line

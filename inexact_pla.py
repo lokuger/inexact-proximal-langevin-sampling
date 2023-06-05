@@ -16,11 +16,11 @@ class inexact_pla():
         - rng (default_rng())   : random number generator for reproducibility, init new one if None
         - epsilon_prox (1e-2)   : prox accuracy, either a scalar or a handle of n as epsilon(n)
         - iter_prox (np.Inf)    : number of iterations for prox, can be given as alternative to epsilon
-        - efficient (True)      : if True, do not save iterates but only running mean and std of samples
+        - efficient (True)      : if True, do not save iterates but only current iterate, running mean and std of samples
         - exact (False)         : if pd.g has an exact proximal operator, can choose True and run exact PGLA
         
     """
-    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, exact=False):
+    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, output_iterates=None, exact=False):
         self.n_iter = n_iter
         self.burnin = burnin
         self.iter = 0
@@ -34,6 +34,13 @@ class inexact_pla():
             self.x = np.copy(x0)
             self.sum = np.zeros(self.shape_x)
             self.sum_sq = np.zeros(self.shape_x)
+            # in efficient mode, there is the option to output a selected number of iterates at given indices
+            if output_iterates is not None:
+                self.I = output_iterates
+            else:
+                self.I = np.reshape(self.n_iter,(1,))   # output last sample if nothing specified
+            n_outputs = np.size(self.I)
+            self.output_iterates = np.zeros(self.shape_x+(n_outputs,))
         else:
             self.x = np.zeros(self.shape_x+(self.n_iter+1,))
             self.x[...,0] = x0
@@ -57,8 +64,12 @@ class inexact_pla():
     
     def simulate(self, verbose=False):
         if verbose: sys.stdout.write('run inexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
+        i = 0
         while self.iter < self.n_iter:
             self.update()
+            if self.eff and self.iter in self.I:
+                self.output_iterates[...,i] = self.x
+                i+=1
             if verbose and self.iter%20==0: 
                 progress = int(self.iter/self.n_iter*100)
                 sys.stdout.write('\b'*5 + '{:3d}% '.format(progress))
@@ -69,17 +80,19 @@ class inexact_pla():
             # once loop is done, compute mean and variance point estimates
             N = self.n_iter-self.burnin
             self.mean = self.sum/N
-            self.var = (self.sum_sq - (self.sum**2)/N)/(N-1)
+            self.var = (self.sum_sq - (self.sum**2)/N)/(N-1) if N>1 else np.NAN
             self.std = np.sqrt(self.var)
         else:
-            self.mean = np.mean(self.x[...,self.burnin+1:],axis=-1)
-            self.std = np.std(self.x[...,self.burnin+1:],axis=-1)
+            self.x = self.x[...,self.burnin+1:]
+            self.mean = np.mean(self.x,axis=-1)
+            self.std = np.std(self.x,axis=-1)
             self.var = self.std**2
         
     def update(self):
         self.iter = self.iter + 1
         xi = self.rng.normal(size=self.shape_x)
         step_size = self.step_size(self.iter)
+        
         if not self.exact:
             epsilon_prox = self.epsilon_prox(self.iter) if self.epsilon_prox is not None else None
             iter_prox = self.iter_prox
