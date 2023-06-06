@@ -26,7 +26,7 @@ class inexact_pla():
         self.iter = 0
         self.rng = rng if rng is not None else default_rng()    # for reproducibility allow to pass rng
         step_size = step_size if step_size is not None else 1/pd.f.L
-        self.step_size = lambda n : step_size if np.isscalar(step_size) else step_size
+        self.step_size = (lambda n : step_size) if np.isscalar(step_size) else step_size
         
         self.shape_x = x0.shape
         self.eff = efficient
@@ -55,7 +55,7 @@ class inexact_pla():
             self.prox_g = pd.g.prox
         else:
             self.inexact_prox_g = pd.g.inexact_prox
-            self.epsilon_prox = lambda n : epsilon_prox if np.isscalar(epsilon_prox) else epsilon_prox
+            self.epsilon_prox = (lambda n : epsilon_prox) if np.isscalar(epsilon_prox) else epsilon_prox
             self.iter_prox = iter_prox
         
         # diagnostic checks
