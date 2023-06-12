@@ -165,8 +165,10 @@ def print_help():
     print(' ')
     print('Options:')
     print('    -h (--help): Print this help.')
-    print('    -s (--stepdecays): Instead of fixed step sizes use decaying step sizes, choice as in remark in paper')
-    print('    -i (--inexactnessdecays): Instead of fixed epsilon choose decaying inexactness level')
+    print('    -n (--n_chains_ipgla): Number of chains to run with IPGLA')
+    print('    -m (--n_samples_pxmala): Number of (unbiased) samples to generate by Px-MALA (1000 burnin + this value)')
+    print('    -s (--step_decays): Instead of fixed step sizes use decaying step sizes, choice as in remark in paper')
+    print('    -i (--inexactness_decays): Instead of fixed epsilon choose decaying inexactness level')
     print('    -r (--rate=): If decaying inexactness level, set the decay rate here')
     print('    -e (--epsilon=): If fixed inexactness level, set the fixed level here')
     print('    -d (--result_dir=): If fixed inexactness level, set the fixed level here')
@@ -175,8 +177,8 @@ def print_help():
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hsir:e:d:v",
-                                   ["help","step_decays","inexactness_decays","rate=","epsilon=","result_dir=","verbose"])
+        opts, args = getopt.getopt(sys.argv[1:],"hn:m:sir:e:d:v",
+                                   ["help","n_chains_ipgla=","n_samples_pxmala=","step_decays","inexactness_decays","rate=","epsilon=","result_dir=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -185,6 +187,10 @@ if __name__ == '__main__':
         if opt in ("-h", "--help"):
             print_help()
             sys.exit()
+        elif opt in ("-n","--n_chains_ipgla"):
+            params['n_chains_ipgla'] = int(arg)
+        elif opt in ("-m","--n_samples_pxmala"):
+            params['iterations_pxmala'] = int(arg)
         elif opt in ("-s", "--step_decays"):
             params['step_type'] = 'decay'
         elif opt in ("-i", "--inexactness_decays"):
