@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 params = {
     'step_type': 'fixed', # 'decay'
-    'inexactness_type': 'decay', # 'decay'
+    'inexactness_type': 'fixed', # 'decay'
     }
 
 def main():
@@ -20,13 +20,12 @@ def main():
     ax.set_xlabel(r'$K$')
     ax.set_yscale("log")
     ax.set_ylabel(r'$\mathcal{W}_2^2(\mu^{K},\mu^{\ast})$')
-    colors = ['b','r','m','g']
+    colors = ['b','r','m','g','c']
     
     res_dir = './results/1dwasserstein/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']+'/'
     if params['inexactness_type'] == 'fixed':
         if params['step_type'] == 'fixed':
-            epsilons = 10.0**(-np.arange(0.0,1.0))   #tbc
-            step = 0.01                             #tbc
+            epsilons = np.array([1, 0.1, 0.01])#10.0**(-np.arange(0.0,3.0))   #tbc
             xmax = 0
             for ie,epsilon in enumerate(epsilons):
                 res_file = res_dir+'W2dists_epsilon'+str(epsilon)+'.npy'
@@ -43,7 +42,6 @@ def main():
     else:
         if params['step_type'] == 'fixed':
             rates = np.array([-0.2,-0.4,-0.6])       #tbc
-            step = 0.01      
             xmax = 0                       #tbc
             for ir,rate in enumerate(rates):
                 res_file = res_dir+'W2dists_rate'+str(rate)+'.npy'

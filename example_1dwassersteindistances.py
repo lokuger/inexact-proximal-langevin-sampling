@@ -20,11 +20,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'n_chains_ipgla': 100,
+    'n_chains_ipgla': 300,
     'iterations_pxmala': 100000,
     'verbose': True,
     'step_type': 'fixed', # 'decay'
-    'inexactness_type': 'decay', # 'fixed'
+    'inexactness_type': 'fixed', # 'fixed'
     'epsilon': 0.1,
     'rate': -0.6,
     'result_root': './results/1dwasserstein',
@@ -70,7 +70,6 @@ def main():
         # might be interesting to remove the following line. This generates the same Brownian motion for different 
         # runs of the script and shows the effect of the error level even more obviously. 
         # But could also be confusing when the error curves look very similar for different error levels/runs
-        rng = default_rng()
         
         x0_pxmala = x_noisy*np.ones((1,1))
         tau_pxmala = 1.2 # tune this by hand to achieve a satisfactory acceptance rate (roughly 50%-65%)
