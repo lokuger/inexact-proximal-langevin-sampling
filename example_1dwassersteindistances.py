@@ -27,6 +27,7 @@ params = {
     'inexactness_type': 'fixed', # 'decay'
     'epsilon': 0.1,
     'rate': -0.2,
+    'result_root': './results/1dwasserstein',
     }
 
 
@@ -34,7 +35,9 @@ params = {
 def main():
     step_fixed = (params['step_type'] == 'fixed')
     errs_fixed = (params['inexactness_type'] == 'fixed')
-    results_dir = './results/wasserstein_estimates/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']+'/'
+    
+    result_root = params['result_root']
+    results_dir = result_root+'/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
         
@@ -166,13 +169,14 @@ def print_help():
     print('    -i (--inexactnessdecays): Instead of fixed epsilon choose decaying inexactness level')
     print('    -r (--rate=): If decaying inexactness level, set the decay rate here')
     print('    -e (--epsilon=): If fixed inexactness level, set the fixed level here')
+    print('    -d (--result_dir=): If fixed inexactness level, set the fixed level here')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hsir:e:v",
-                                   ["help","stepdecays","inexactnessdecays","rate=","epsilon=","verbose"])
+        opts, args = getopt.getopt(sys.argv[1:],"hsir:e:d:v",
+                                   ["help","step_decays","inexactness_decays","rate=","epsilon=","result_dir=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -181,14 +185,16 @@ if __name__ == '__main__':
         if opt in ("-h", "--help"):
             print_help()
             sys.exit()
-        elif opt in ("-s", "--stepdecays"):
+        elif opt in ("-s", "--step_decays"):
             params['step_type'] = 'decay'
-        elif opt in ("-i", "--inexactnessdecays"):
+        elif opt in ("-i", "--inexactness_decays"):
             params['inexactness_type'] = 'decay'
         elif opt in ("-r", "--rate"):
             params['rate'] = np.float16(arg)
         elif opt in ("-e","--epsilon"):
             params['epsilon'] = np.float16(arg)
+        elif opt in ("-d","--result_dir"):
+            params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()
