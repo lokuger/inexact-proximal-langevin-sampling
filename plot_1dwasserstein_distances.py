@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 params = {
     'step_type': 'fixed', # 'decay'
-    'inexactness_type': 'fixed', # 'decay'
+    'inexactness_type': 'decay', # 'decay'
     }
 
 def main():
@@ -22,7 +22,7 @@ def main():
     ax.set_ylabel(r'$\mathcal{W}_2^2(\mu^{K},\mu^{\ast})$')
     colors = ['b','r','m','g']
     
-    res_dir = './results/wasserstein_estimates/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']+'/'
+    res_dir = './results/1dwasserstein/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']+'/'
     if params['inexactness_type'] == 'fixed':
         if params['step_type'] == 'fixed':
             epsilons = 10.0**(-np.arange(0.0,1.0))   #tbc
@@ -43,8 +43,9 @@ def main():
     else:
         if params['step_type'] == 'fixed':
             rates = np.array([-0.2,-0.4,-0.6])       #tbc
-            step = 0.01                             #tbc
-            for rate in rates:
+            step = 0.01      
+            xmax = 0                       #tbc
+            for ir,rate in enumerate(rates):
                 res_file = res_dir+'W2dists_rate'+str(rate)+'.npy'
                 res_file_ub = res_dir+'W2dists_ub_rate'+str(rate)+'.npy'
                 steps_file = res_dir+'steps'+str(rate)+'.npy'
@@ -54,8 +55,8 @@ def main():
                 if np.max(K) > xmax: xmax = np.max(K)
                 
                 s = r'$k^{'+'{:.1f}'.format(rate)+'}$'
-                ax.plot(K,W2sq,colors[ie],label=r'$\mathcal{W}_2^2(\mu^K,\mu^\ast), \epsilon_k \propto $'+'{:s}'.format(s))
-                ax.plot(K,W2sq_ub,colors[ie]+'--',label=r'upper bound $\epsilon_k \propto ${:s}'.format(s))
+                ax.plot(K,W2sq,colors[ir],label=r'$\mathcal{W}_2^2(\mu^K,\mu^\ast), \epsilon_k \propto $'+'{:s}'.format(s))
+                ax.plot(K,W2sq_ub,colors[ir]+'--',label=r'upper bound $\epsilon_k \propto ${:s}'.format(s))
         else:
             rate = np.array([-0.2,-0.4,-0.6])       #tbc
     ax.legend()

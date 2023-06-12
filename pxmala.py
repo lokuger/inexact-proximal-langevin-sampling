@@ -79,7 +79,7 @@ class pxmala():
                 ar = int(self.accepted/self.iter*100)
                 sys.stdout.write('\b'*16 + '{:3d}%. AR = {:3d}% '.format(progress,ar));
                 sys.stdout.flush()
-        if verbose > 0: sys.stdout.write('\n'); sys.stdout.flush()
+        # if verbose > 0: sys.stdout.write('\n'); sys.stdout.flush()
             
         if self.eff:
             # once loop is done, compute mean and variance point estimates

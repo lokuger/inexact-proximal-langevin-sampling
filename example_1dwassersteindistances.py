@@ -20,13 +20,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'n_chains_ipgla': 1000,
+    'n_chains_ipgla': 100,
     'iterations_pxmala': 100000,
     'verbose': True,
     'step_type': 'fixed', # 'decay'
-    'inexactness_type': 'fixed', # 'decay'
+    'inexactness_type': 'decay', # 'fixed'
     'epsilon': 0.1,
-    'rate': -0.2,
+    'rate': -0.6,
     'result_root': './results/1dwasserstein',
     }
 
@@ -55,8 +55,8 @@ def main():
     #else:
     if True:
         #%% generate data - artificial image with pixels drawn from Laplace distribution
-        # rng = default_rng(246264) # can be interesting to compare the behaviour of chains driven by the same noise under different error levels
-        rng = default_rng()
+        # fix the seed here so that the posterior remains the same for different runs of the script
+        rng = default_rng(65654)
         verb = params['verbose']
         
         l1scale = 1
@@ -67,6 +67,11 @@ def main():
         posterior = pds.l2_l1prior(y=x_noisy, noise_std=noise_std, mu_l1=l1scale)
         
         #%% sample unbiasedly from posterior using PxMALA
+        # might be interesting to remove the following line. This generates the same Brownian motion for different 
+        # runs of the script and shows the effect of the error level even more obviously. 
+        # But could also be confusing when the error curves look very similar for different error levels/runs
+        rng = default_rng()
+        
         x0_pxmala = x_noisy*np.ones((1,1))
         tau_pxmala = 1.2 # tune this by hand to achieve a satisfactory acceptance rate (roughly 50%-65%)
         n_samples_pxmala = params['iterations_pxmala'] # int(10*T/tau_pxmala)
