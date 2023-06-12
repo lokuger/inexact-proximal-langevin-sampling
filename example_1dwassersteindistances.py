@@ -160,7 +160,7 @@ def main():
 #%% help function for calling from command line
 def print_help():
     print('<>'*39)
-    print('Run inexact proximal Langevin algorithm to generate samples from L1-TV posterior.')
+    print('Run inexact proximal Langevin algorithm to generate samples from a synthetic 1D posterior.')
     print('<>'*39)
     print(' ')
     print('Options:')
