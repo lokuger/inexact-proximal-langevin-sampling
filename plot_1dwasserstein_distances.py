@@ -15,17 +15,18 @@ params = {
 
 def main():
     ax = plt.axes()
-    ax.set_title('Wasserstein-2 distances')
+    ax.set_title('Squared Wasserstein-2 distances')
     ax.set_xscale("log")
     ax.set_xlabel(r'$K$')
     ax.set_yscale("log")
     ax.set_ylabel(r'$\mathcal{W}_2^2(\mu^{K},\mu^{\ast})$')
-    colors = ['b','r','m','g','c']
+    colors = ['b','r','m','g','c','y','k','r']
+    markers = ['^','v','o','s','*','H','X','D']
     
     res_dir = './results/1dwasserstein/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']+'/'
     if params['inexactness_type'] == 'fixed':
         if params['step_type'] == 'fixed':
-            epsilons = np.array([1, 0.1, 0.01])#10.0**(-np.arange(0.0,3.0))   #tbc
+            epsilons = np.array([1, 0.5, 0.25, 0.1, 0.05, 0.025])#10.0**(-np.arange(0.0,3.0))   #tbc
             xmax = 0
             for ie,epsilon in enumerate(epsilons):
                 res_file = res_dir+'W2dists_epsilon'+str(epsilon)+'.npy'
@@ -36,9 +37,10 @@ def main():
                 K = np.load(steps_file)
                 if np.max(K) > xmax: xmax = np.max(K)
                 
-                s = '{:.0e}'.format(epsilon) if epsilon > 0 else '0'
-                ax.plot(K,W2sq,colors[ie],label=r'$\mathcal{W}_2^2(\mu^K,\mu^\ast), \epsilon = $'+'{:s}'.format(s))
-                ax.plot(K,W2sq_ub,colors[ie]+'--',label=r'upper bound $\epsilon = ${:s}'.format(s))
+                s = '{:g}'.format(epsilon) if epsilon > 0 else '0'
+                ax.plot(K,W2sq,colors[ie]+'-'+markers[ie],label=r'$\mathcal{W}_2^2(\mu^K,\mu^\ast), \epsilon = $'+'{:s}'.format(s))
+                ax.plot(K,W2sq_ub,colors[ie]+'--'+markers[ie])
+                # ax.plot(K,W2sq_ub,colors[ie]+'--',label=r'upper bound $\epsilon = ${:s}'.format(s))
     else:
         if params['step_type'] == 'fixed':
             rates = np.array([-0.2,-0.4,-0.6])       #tbc
@@ -54,10 +56,11 @@ def main():
                 
                 s = r'$k^{'+'{:.1f}'.format(rate)+'}$'
                 ax.plot(K,W2sq,colors[ir],label=r'$\mathcal{W}_2^2(\mu^K,\mu^\ast), \epsilon_k \propto $'+'{:s}'.format(s))
-                ax.plot(K,W2sq_ub,colors[ir]+'--',label=r'upper bound $\epsilon_k \propto ${:s}'.format(s))
+                ax.plot(K,W2sq_ub,colors[ir]+'--')
+                # ax.plot(K,W2sq_ub,colors[ir]+'--',label=r'upper bound $\epsilon_k \propto ${:s}'.format(s))
         else:
             rate = np.array([-0.2,-0.4,-0.6])       #tbc
-    ax.legend()
+    ax.legend(loc='lower left')
     ax.set_xlim(1,xmax+0.2)
     
     plt.savefig(res_dir+'/W2_plots.pdf')
