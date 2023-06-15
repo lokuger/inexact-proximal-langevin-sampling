@@ -8,14 +8,11 @@ Created on Mon Feb 13 16:47:26 2023
 
 import numpy as np
 from numpy.random import default_rng
-import matplotlib.pyplot as plt
 import sys, getopt, os
-from time import time
 import ot
 
 from inexact_pla import inexact_pla
 from pxmala import pxmala
-import potentials as pot
 import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
