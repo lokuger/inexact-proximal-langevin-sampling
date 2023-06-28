@@ -123,7 +123,7 @@ def main():
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
         # handle images that are too large or colored
-        Nmax = 512
+        Nmax = 256
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         x = x-np.min(x)
         x = x/np.max(x)
@@ -149,7 +149,7 @@ def main():
         my_imshow(x, 'ground truth')
         my_imshow(y, 'noisy image')
         
-        #%% regularization parameter
+        #%% MAP computation - using ISTA
         mu_l1 = 5.0
         posterior = pds.l2_deblur_l1prior(b, bt, max_ev_ata, y, noise_std=noise_std, mu_l1=mu_l1)
         
@@ -167,7 +167,7 @@ def main():
         if verb: sys.stdout.write('\b'*5 + '100%\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (ISTA, mu_l1 = {:.2f})'.format(mu_l1))
-        print('MAP: mu_l1 = {:.2f};\tPSNR: {:.4f}'.format(mu_l1,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+        print('MAP estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
         
         #%% sample Wavelet coefficients using inexact PLA
         c0 = np.copy(c_y)
@@ -199,7 +199,7 @@ def main():
         mmse_coeffs = ipla.mean
         im_mmse = idwt(mmse_coeffs)
         my_imshow(im_mmse, 'MMSE coeffs, log10(epsilon)={}'.format(params['log_epsilon']))
-        print('MMSE PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((im_mmse-x)**2))))
+        print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((im_mmse-x)**2))))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
@@ -211,7 +211,7 @@ def main():
         my_imshow(y, 'noisy')
         my_imshow(u, 'map')
         my_imshow(mn, 'mmse estimate, logeps={:.1f}'.format(params['log_epsilon']))
-        print('PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+        print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # image details for paper close-up
         my_imsave(x,results_dir+'/ground_truth.png')

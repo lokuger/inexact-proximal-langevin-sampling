@@ -62,9 +62,9 @@ def main():
     if not os.path.exists(sample_dir): os.makedirs(sample_dir)
     results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
     if not os.path.exists(results_dir): os.makedirs(results_dir)
-        
+    results_file = results_dir+'/result_images.npy'    
+    
     #%% Ground truth
-    results_file = results_dir+'/result_images.npy'
     if not os.path.exists(results_file):    
         rng = default_rng(6346534)
         verb = params['verbose']
@@ -74,18 +74,16 @@ def main():
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
         # handle images that are too large or colored
-        if x.shape[0] > 512 or x.shape[1] > 512: x = transform.resize(x, (512,512))
+        Nmax = 256
+        if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         x = x-np.min(x)
         x = x/np.max(x)
-        # assume quadratic images
-        n = x.shape[0]
+        n = x.shape[0] # assume quadratic image, otherwise change some implementation details
         
         tv = pot.total_variation(n, n, scale=1)
         # tv_groundtruth = tv(x)
         
         #%% Forward model & corrupted data
-        # a,at,_ = lambda x : x, lambda x : x, 1
-        
         noise_std = params['noise_std']
         y = x + noise_std*rng.normal(size=x.shape)
         L = 1/noise_std**2
@@ -147,7 +145,6 @@ def main():
             tau = 1/L
         elif params['step'] == 'small':
             tau = 0.5/L
-        
         epsilon = 10**params['log_epsilon']
         n_samples = params['iterations']
         burnin = 50 # burnin for denoising is usually short since noisy data is itself in region of high probability of the posterior
@@ -161,18 +158,20 @@ def main():
         
         #%% plots
         # diagnostic plot, making sure the sampler looks plausible
+        plt.figure()
         plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
         plt.show()
+        plt.figure()
         plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         plt.show()
         
-        # my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
-        # my_imshow(ipla.mean[314:378,444:508],'sample mean details')
-        # logstd = np.log10(ipla.std)
-        # my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
-        # my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
+        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
+        my_imshow(ipla.mean[314:378,444:508],'sample mean details')
+        logstd = np.log10(ipla.std)
+        my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
+        my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
@@ -189,7 +188,7 @@ def main():
         
         my_imshow(mn, 'mean', results_dir+'/cbar.pdf')
         my_imshow(logstd, 'logstd', results_dir+'/cbar_std.pdf',-1.15,-0.58)
-        print('PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+        print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # image details for paper close-up
         # my_imsave(x[314:378,444:508], results_dir+'/ground_truth_detail.png')
