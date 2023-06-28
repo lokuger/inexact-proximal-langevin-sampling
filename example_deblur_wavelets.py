@@ -20,11 +20,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 1000,
+    'iterations': 5000,
     'testfile_path': 'test_images/fibo2.jpeg',
     'blur_width': 15,
     'noise_std': 0.05,
-    'log_epsilon': -np.Inf,
+    'log_epsilon': -0.1, # -0.1, -0.5, -2.0, -np.Inf
     'step': 'large',
     'verbose': True
     }
@@ -123,7 +123,7 @@ def main():
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
         # handle images that are too large or colored
-        Nmax = 256
+        Nmax = 512
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         x = x-np.min(x)
         x = x/np.max(x)
@@ -177,10 +177,10 @@ def main():
         tau = step_factors[params['step']] * tau_max
         
         if params['log_epsilon'] == -np.Inf:
-            ipla = inexact_pla(c0, n_samples, burnin, posterior, step_size=tau, rng=rng, efficient=False, exact=True)
+            ipla = inexact_pla(c0, n_samples, burnin, posterior, step_size=tau, rng=rng, efficient=True, exact=True)
         else:
             epsilon = 10**params['log_epsilon']
-            ipla = inexact_pla(c0, n_samples, burnin, posterior, step_size=tau, epsilon_prox=epsilon, rng=rng, efficient=False)
+            ipla = inexact_pla(c0, n_samples, burnin, posterior, step_size=tau, epsilon_prox=epsilon, rng=rng, efficient=True)
         
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
