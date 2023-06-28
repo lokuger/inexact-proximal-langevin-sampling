@@ -26,7 +26,8 @@ params = {
     'log_epsilon': 0.0,
     'step': 'large',
     'efficient': True,
-    'verbose': True
+    'verbose': True,
+    'result_root': './results/denoise-tv',
     }
 
 #%% auxiliary functions
@@ -52,17 +53,16 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
 
 #%% Main method - generate results directories
 def main():
-    if not os.path.exists('./results'): os.makedirs('./results')
-    if not os.path.exists('./results/denoise_tv'): os.makedirs('./results/denoise_tv')
-    accuracy_dir = './results/denoise_tv/log_epsilon{}'.format(params['log_epsilon'])
-    if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
-    if not os.path.exists(step_dir): os.makedirs(step_dir)
-    sample_dir = step_dir + '/{}samples'.format(params['iterations'])
-    if not os.path.exists(sample_dir): os.makedirs(sample_dir)
-    results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
-    if not os.path.exists(results_dir): os.makedirs(results_dir)
-    results_file = results_dir+'/result_images.npy'    
+    result_root = params['result_root']
+    
+    test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
+    accuracy = 'log-epsilon{}'.format(params['log_epsilon'])
+    file_specifier = '{}_{}_{}-samples'.format(test_image_name,accuracy,params['iterations'])
+    results_file = result_root+'/'+file_specifier+'.npy'
+    mmse_file = result_root+'/mmse_'+file_specifier+'.png'  
+    mmse_detail_file = result_root+'/mmse_detail_'+file_specifier+'.png'  
+    logstd_file = result_root+'/logstd_'+file_specifier+'.png'  
+    logstd_detail_file = result_root+'/logstd_detail_'+file_specifier+'.png'  
     
     #%% Ground truth
     if not os.path.exists(results_file):    
@@ -147,14 +147,13 @@ def main():
             tau = 0.5/L
         epsilon = 10**params['log_epsilon']
         n_samples = params['iterations']
-        burnin = 50 # burnin for denoising is usually short since noisy data is itself in region of high probability of the posterior
+        burnin = 50 # burnin for denoising is usually short
         posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
         ipla = inexact_pla(x0, tau, epsilon, n_samples, burnin, posterior, rng=rng, efficient=eff)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
-        if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         #%% plots
         # diagnostic plot, making sure the sampler looks plausible
@@ -180,22 +179,25 @@ def main():
     else:
         x,y,u,mn,std = np.load(results_file)
         logstd = np.log10(std)
-        # my_imsave(x, results_dir+'/ground_truth.png')
-        # my_imsave(y, results_dir+'/noisy.png')
-        # my_imsave(u, results_dir+'/map.png')
-        # my_imsave(mn, results_dir+'/posterior_mean.png')
-        # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.15,-0.58)
         
-        my_imshow(mn, 'mean', results_dir+'/cbar.pdf')
-        my_imshow(logstd, 'logstd', results_dir+'/cbar_std.pdf',-1.15,-0.58)
+        my_imshow(x, 'ground truth')
+        my_imshow(y, 'noisy')
+        my_imshow(u, 'map')
+        my_imshow(mn, 'mean')
+        my_imshow(logstd, 'logstd')
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
+        my_imsave(x,result_root+'/ground_truth.png')
+        my_imsave(y,result_root+'/noisy.png')
+        my_imsave(u,result_root+'/map.png')
+        my_imsave(mn, mmse_file)
+        my_imsave(logstd, logstd_file,-1.15,-0.58)
         # image details for paper close-up
-        # my_imsave(x[314:378,444:508], results_dir+'/ground_truth_detail.png')
-        # my_imsave(y[314:378,444:508], results_dir+'/noisy_detail.png')
-        # my_imsave(u[314:378,444:508], results_dir+'/map_detail.png')
-        # my_imsave(mn[314:378,444:508], results_dir+'/posterior_mean_detail.png')
-        # my_imsave(logstd[314:378,444:508], results_dir+'/posterior_logstd_detail.png', -1.15,-0.58)
+        my_imsave(x[314:378,444:508], result_root+'/ground_truth_detail.png')
+        my_imsave(y[314:378,444:508], result_root+'/noisy_detail.png')
+        my_imsave(u[314:378,444:508], result_root+'/map_detail.png')
+        my_imsave(mn[314:378,444:508], mmse_detail_file)
+        my_imsave(logstd[314:378,444:508], logstd_detail_file, -1.15,-0.58)
         
 #%% help function for calling from command line
 def print_help():
@@ -210,16 +212,16 @@ def print_help():
     print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
     print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
     print('    -s (--step=): \'large\' for 1/L or \'small\' for 0.5/L')
+    print('    -d (--result_dir=): root directory for results. Default: ./results/deblur-wavelets')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:s:v",
-                                   ["help","iterations=","testfile_path=",
-                                    "efficient_off","log_epsilon=","step=",
-                                    "verbose"])
-    except getopt.GetoptError:
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:s:d:v",
+                                   ["help","iterations=","testfile_path=","efficient_off","neg_log_epsilon=","step=","result_dir=","verbose"])
+    except getopt.GetoptError as e:
+        print(e.msg)
         print_help()
         sys.exit(2)
     
@@ -233,10 +235,12 @@ if __name__ == '__main__':
             params['testfile_path'] = arg
         elif opt in ("-e","--efficient_off"):
             params['efficient'] = False
-        elif opt in ("-l", "--log_epsilon"):
-            params['log_epsilon'] = float(arg)
+        elif opt in ("-n", "--neg_log_epsilon"):
+            params['log_epsilon'] = -float(arg)
         elif opt in ["-s", "--step="]:
             params['step'] = arg
+        elif opt in ("-d","--result_dir"):
+            params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()
