@@ -24,7 +24,7 @@ params = {
     'testfile_path': 'test-images/fibo2.jpeg',
     'blur_width': 15,
     'noise_std': 0.05,
-    'log_epsilon': -0.1, # -0.1, -0.5, -2.0, -np.Inf
+    'log_epsilon': -np.Inf, # -0.1, -0.5, -2.0, -np.Inf
     'step': 'large',
     'verbose': False,
     'result_root': './results/deblur-wavelets',
@@ -102,7 +102,7 @@ def main():
     if not os.path.exists('./results'): os.makedirs('./results')
     if not os.path.exists('./results/deblur-wavelets'): os.makedirs('./results/deblur-wavelets')
     if params['log_epsilon'] == -np.Inf:
-        accuracy_dir = './results/deblur-wavelets/exact_prox'
+        accuracy_dir = './results/deblur-wavelets/exact-prox'
     else:
         accuracy_dir = './results/deblur-wavelets/log-epsilon{}'.format(params['log_epsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
