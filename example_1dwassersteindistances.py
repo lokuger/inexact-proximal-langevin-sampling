@@ -24,7 +24,7 @@ params = {
     'inexactness_type': 'fixed', # 'fixed'
     'epsilon': 0.1,
     'rate': -0.6,
-    'result_root': './results/1dwasserstein',
+    'result_root': './results/wasserstein_dists_validation',
     }
 
 
