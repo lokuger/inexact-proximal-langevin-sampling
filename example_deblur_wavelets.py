@@ -20,13 +20,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 5000,
+    'iterations': 500,
     'testfile_path': 'test-images/fibo2.jpeg',
     'blur_width': 15,
     'noise_std': 0.05,
     'log_epsilon': -np.Inf, # -0.1, -0.5, -2.0, -np.Inf
     'step': 'large',
-    'verbose': False,
+    'verbose': True,
     'result_root': './results/deblur-wavelets',
     }
 
@@ -99,20 +99,13 @@ def wavelet_operators(n, slices, wav_type, wav_level):
 #%% main
 def main():
     #%% generate results directories
-    if not os.path.exists('./results'): os.makedirs('./results')
-    if not os.path.exists('./results/deblur-wavelets'): os.makedirs('./results/deblur-wavelets')
-    if params['log_epsilon'] == -np.Inf:
-        accuracy_dir = './results/deblur-wavelets/exact-prox'
-    else:
-        accuracy_dir = './results/deblur-wavelets/log-epsilon{}'.format(params['log_epsilon'])
-    if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
-    if not os.path.exists(step_dir): os.makedirs(step_dir)
-    sample_dir = step_dir + '/{}samples'.format(params['iterations'])
-    if not os.path.exists(sample_dir): os.makedirs(sample_dir)
-    results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
-    if not os.path.exists(results_dir): os.makedirs(results_dir)
-    results_file = results_dir+'/result_images.npy'
+    result_root = params['result_root']
+    
+    test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
+    accuracy = 'exact-prox' if params['log_epsilon'] == -np.Inf else 'log-epsilon{}'.format(params['log_epsilon'])
+    file_specifier = '{}_{}_{}-samples'.format(test_image_name,accuracy,params['iterations'])
+    results_file = result_root+'/'+file_specifier+'.npy'
+    mmse_file = result_root+'/'+file_specifier+'_mmse.png'
     
     if not os.path.exists(results_file):    
         #%% generate ground truth and noisy image
@@ -123,7 +116,7 @@ def main():
         except FileNotFoundError:
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
-        # handle images that are too large or colored
+        # handle images that are too large
         Nmax = 512
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         x = x-np.min(x)
@@ -168,7 +161,7 @@ def main():
         if verb: sys.stdout.write('\b'*5 + '100%\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (ISTA, mu_l1 = {:.2f})'.format(mu_l1))
-        print('MAP estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+        if verb: print('MAP estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
         
         #%% sample Wavelet coefficients using inexact PLA
         c0 = np.copy(c_y)
@@ -215,10 +208,10 @@ def main():
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # image details for paper close-up
-        my_imsave(x,results_dir+'/ground_truth.png')
-        my_imsave(y,results_dir+'/noisy.png')
-        my_imsave(u,results_dir+'/map.png')
-        my_imsave(mn,results_dir+'/posterior_mean.png')
+        my_imsave(x,result_root+'/ground_truth.png')
+        my_imsave(y,result_root+'/noisy.png')
+        my_imsave(u,result_root+'/map.png')
+        my_imsave(mn,mmse_file)
         
 #%% help function for calling from command line
 def print_help():
