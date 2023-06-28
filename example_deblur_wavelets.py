@@ -105,7 +105,7 @@ def main():
     accuracy = 'exact-prox' if params['log_epsilon'] == -np.Inf else 'log-epsilon{}'.format(params['log_epsilon'])
     file_specifier = '{}_{}_{}-samples'.format(test_image_name,accuracy,params['iterations'])
     results_file = result_root+'/'+file_specifier+'.npy'
-    mmse_file = result_root+'/'+file_specifier+'_mmse.png'
+    mmse_file = result_root+'/mmse_'+file_specifier+'.png'
     
     if not os.path.exists(results_file):    
         #%% generate ground truth and noisy image
