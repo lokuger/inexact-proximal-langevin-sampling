@@ -24,7 +24,7 @@ params = {
     'testfile_path': 'test-images/fibo2.jpeg',
     'blur_width': 15,
     'noise_std': 0.05,
-    'log_epsilon': -0.1, # -0.1, -0.5, -2.0, -np.Inf
+    'log_epsilon': -np.Inf, # -0.1, -0.5, -2.0, -np.Inf
     'step': 'large',
     'verbose': True,
     'result_root': './results/deblur-wavelets',
