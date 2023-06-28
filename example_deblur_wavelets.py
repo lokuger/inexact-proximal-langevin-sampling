@@ -241,7 +241,8 @@ if __name__ == '__main__':
     try:
         opts, args = getopt.getopt(sys.argv[1:],"hi:f:n:s:d:v",
                                    ["help","iterations=","testfile_path=","neg_log_epsilon=","step=","result_dir=","verbose"])
-    except getopt.GetoptError:
+    except getopt.GetoptError as e:
+        print(e.msg)
         print_help()
         sys.exit(2)
     
