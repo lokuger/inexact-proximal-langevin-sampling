@@ -7,6 +7,9 @@ results/*
 results_berlin/*
 .DS_Store
 
+# matlab files
+*.m
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
