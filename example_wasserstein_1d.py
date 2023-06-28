@@ -19,12 +19,12 @@ import distributions as pds
 params = {
     'n_chains_ipgla': 300,
     'iterations_pxmala': 100000,
-    'verbose': True,
+    'verbose': False,
     'step_type': 'fixed', # 'decay'
     'inexactness_type': 'fixed', # 'fixed'
     'epsilon': 0.1,
     'rate': -0.6,
-    'result_root': './results/wasserstein_dists_validation',
+    'result_root': './results/wasserstein-dists-validation',
     }
 
 
@@ -39,12 +39,12 @@ def main():
         os.makedirs(results_dir)
         
     if errs_fixed: 
-        results_file = results_dir+'/W2dists_epsilon'+str(params['epsilon'])+'.npy'
-        results_file_ub = results_dir+'/W2dists_ub_epsilon'+str(params['epsilon'])+'.npy'
+        results_file = results_dir+'/W2dists-epsilon'+str(params['epsilon'])+'.npy'
+        results_file_ub = results_dir+'/W2dists-ub-epsilon'+str(params['epsilon'])+'.npy'
         steps_file = results_dir+'/steps'+str(params['epsilon'])+'.npy'
     else:
-        results_file = results_dir+'/W2dists_rate'+str(params['rate'])+'.npy'
-        results_file_ub = results_dir+'/W2dists_ub_rate'+str(params['rate'])+'.npy'
+        results_file = results_dir+'/W2dists-rate'+str(params['rate'])+'.npy'
+        results_file_ub = results_dir+'/W2dists-ub-rate'+str(params['rate'])+'.npy'
         steps_file = results_dir+'/steps'+str(params['rate'])+'.npy'
     
     #if os.path.exists(results_file) and os.path.exists(results_file_ub):
@@ -172,7 +172,7 @@ def print_help():
     print('    -i (--inexactness_decays): Instead of fixed epsilon choose decaying inexactness level')
     print('    -r (--rate=): If decaying inexactness level, set the decay rate here')
     print('    -e (--epsilon=): If fixed inexactness level, set the fixed level here')
-    print('    -d (--result_dir=): If fixed inexactness level, set the fixed level here')
+    print('    -d (--result_dir=): root directory for results. Default: ./results/wasserstein-dists-validation')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main

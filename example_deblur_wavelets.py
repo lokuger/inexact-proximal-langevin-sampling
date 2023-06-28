@@ -21,12 +21,13 @@ import distributions as pds
 #%% initial parameters: test image, computation settings etc.
 params = {
     'iterations': 5000,
-    'testfile_path': 'test_images/fibo2.jpeg',
+    'testfile_path': 'test-images/fibo2.jpeg',
     'blur_width': 15,
     'noise_std': 0.05,
     'log_epsilon': -0.1, # -0.1, -0.5, -2.0, -np.Inf
     'step': 'large',
-    'verbose': True
+    'verbose': False,
+    'result_root': './results/deblur-wavelets',
     }
 
 step_factors = {
@@ -99,11 +100,11 @@ def wavelet_operators(n, slices, wav_type, wav_level):
 def main():
     #%% generate results directories
     if not os.path.exists('./results'): os.makedirs('./results')
-    if not os.path.exists('./results/deblur_wavelets'): os.makedirs('./results/deblur_wavelets')
+    if not os.path.exists('./results/deblur-wavelets'): os.makedirs('./results/deblur-wavelets')
     if params['log_epsilon'] == -np.Inf:
-        accuracy_dir = './results/deblur_wavelets/exact_prox'
+        accuracy_dir = './results/deblur-wavelets/exact_prox'
     else:
-        accuracy_dir = './results/deblur_wavelets/log_epsilon{}'.format(params['log_epsilon'])
+        accuracy_dir = './results/deblur-wavelets/log-epsilon{}'.format(params['log-epsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
     step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
     if not os.path.exists(step_dir): os.makedirs(step_dir)
@@ -230,16 +231,16 @@ def print_help():
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
     print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
-    print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
+    print('    -n (--neg_log_epsilon=): negative log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**-neg_log_epsilon in verbose mode')
     print('    -s (--step=): \'large\' for 1/L or \'small\' for 0.5/L')
+    print('    -d (--result_dir=): root directory for results. Default: ./results/deblur-wavelets')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:l:s:v",
-                                   ["help","iterations=","testfile_path=",
-                                    "log_epsilon=","step=","verbose"])
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:n:s:d:v",
+                                   ["help","iterations=","testfile_path=","neg_log_epsilon=","step=","result_dir=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -252,10 +253,12 @@ if __name__ == '__main__':
             params['iterations'] = int(arg)
         elif opt in ("-f", "--testfile_path"):
             params['testfile_path'] = arg
-        elif opt in ("-l", "--log_epsilon"):
-            params['log_epsilon'] = float(arg)
+        elif opt in ("-n", "--neg_log_epsilon"):
+            params['log_epsilon'] = -float(arg)
         elif opt in ["-s", "--step="]:
             params['step'] = arg
+        elif opt in ("-d","--result_dir"):
+            params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()
