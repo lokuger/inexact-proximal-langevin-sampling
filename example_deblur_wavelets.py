@@ -104,7 +104,7 @@ def main():
     if params['log_epsilon'] == -np.Inf:
         accuracy_dir = './results/deblur-wavelets/exact_prox'
     else:
-        accuracy_dir = './results/deblur-wavelets/log-epsilon{}'.format(params['log-epsilon'])
+        accuracy_dir = './results/deblur-wavelets/log-epsilon{}'.format(params['log_epsilon'])
     if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
     step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
     if not os.path.exists(step_dir): os.makedirs(step_dir)
