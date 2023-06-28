@@ -3,7 +3,6 @@
 
 # result images
 results/*
-*.png
 results_berlin/*
 .DS_Store
 
