@@ -219,7 +219,7 @@ def print_help():
 if __name__ == '__main__':
     try:
         opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:s:d:v",
-                                   ["help","iterations=","testfile_path=","efficient_off","neg_log_epsilon=","step=","result_dir=","verbose"])
+                                   ["help","iterations=","testfile_path=","efficient_off","log_epsilon=","step=","result_dir=","verbose"])
     except getopt.GetoptError as e:
         print(e.msg)
         print_help()
@@ -235,8 +235,8 @@ if __name__ == '__main__':
             params['testfile_path'] = arg
         elif opt in ("-e","--efficient_off"):
             params['efficient'] = False
-        elif opt in ("-n", "--neg_log_epsilon"):
-            params['log_epsilon'] = -float(arg)
+        elif opt in ("-l", "--log_epsilon"):
+            params['log_epsilon'] = float(arg)
         elif opt in ["-s", "--step="]:
             params['step'] = arg
         elif opt in ("-d","--result_dir"):
