@@ -20,7 +20,7 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
+    'iterations': 100000,
     'testfile_path': 'test-images/fibo2.jpeg',
     'blur_width': 15,
     'noise_std': 0.05,
@@ -201,16 +201,16 @@ def main():
         np.save(results_file,(x,y,u,im_mmse))
     else:
         x,y,u,mn = np.load(results_file)
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'noisy')
-        my_imshow(u, 'map')
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'noisy')
+        # my_imshow(u, 'map')
         my_imshow(mn, 'mmse estimate, logeps={:.1f}'.format(params['log_epsilon']))
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # image details for paper close-up
-        my_imsave(x,result_root+'/ground_truth.png')
-        my_imsave(y,result_root+'/noisy.png')
-        my_imsave(u,result_root+'/map.png')
+        # my_imsave(x,result_root+'/ground_truth.png')
+        # my_imsave(y,result_root+'/noisy.png')
+        # my_imsave(u,result_root+'/map.png')
         my_imsave(mn,mmse_file)
         
 #%% help function for calling from command line

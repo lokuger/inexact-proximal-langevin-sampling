@@ -20,8 +20,8 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
-    'testfile_path': 'test_images/wheel.png',
+    'iterations': 100000,
+    'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
     'log_epsilon': 0.0,
     'step': 'large',
@@ -74,7 +74,7 @@ def main():
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
         # handle images that are too large or colored
-        Nmax = 256
+        Nmax = 512
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         x = x-np.min(x)
         x = x/np.max(x)
@@ -151,7 +151,7 @@ def main():
         posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
-        ipla = inexact_pla(x0, tau, epsilon, n_samples, burnin, posterior, rng=rng, efficient=eff)
+        ipla = inexact_pla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         
