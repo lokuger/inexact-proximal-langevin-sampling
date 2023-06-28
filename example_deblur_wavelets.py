@@ -20,7 +20,7 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
+    'iterations': 1000,
     'testfile_path': 'test_images/fibo2.jpeg',
     'blur_width': 15,
     'noise_std': 0.05,
@@ -164,7 +164,7 @@ def main():
             k += 1
             c_u = posterior.g.prox(c_u - tau_ista * posterior.f.grad(c_u), tau_ista)
         u = idwt(c_u)
-        if verb: sys.stdout.write('Complete.\n'); sys.stdout.flush()
+        if verb: sys.stdout.write('\b'*5 + '100%\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (ISTA, mu_l1 = {:.2f})'.format(mu_l1))
         print('MAP: mu_l1 = {:.2f};\tPSNR: {:.4f}'.format(mu_l1,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
@@ -184,7 +184,6 @@ def main():
         
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
-        if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         #%% plots
         # diagnostic plot, making sure the sampler looks plausible

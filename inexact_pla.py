@@ -74,7 +74,7 @@ class inexact_pla():
                 progress = int(self.iter/self.n_iter*100)
                 sys.stdout.write('\b'*5 + '{:3d}% '.format(progress))
                 sys.stdout.flush()
-        if verbose > 0: sys.stdout.write('\n'); sys.stdout.flush()
+        if verbose > 0: sys.stdout.write('\b'*5 + '100%\n'); sys.stdout.flush()
         
         if self.eff:
             # once loop is done, compute mean and variance point estimates

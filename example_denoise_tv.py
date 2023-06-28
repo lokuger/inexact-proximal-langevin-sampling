@@ -20,7 +20,7 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100000,
+    'iterations': 10000,
     'testfile_path': 'test_images/wheel.png',
     'noise_std': 0.2,
     'log_epsilon': 0.0,
@@ -36,7 +36,7 @@ def my_imsave(im, filename, vmin=-0.02, vmax=1.02):
     im = np.clip((im-vmin)/(vmax-vmin) * 256,0,255).astype('uint8')
     io.imsave(filename, im)
     
-def my_imshow(im, label, cbarfile, vmin=-0.02, vmax=1.02, cbar=False):
+def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
     fig = plt.figure()
     plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
     q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
@@ -45,10 +45,10 @@ def my_imshow(im, label, cbarfile, vmin=-0.02, vmax=1.02, cbar=False):
     plt.show()
     
     # draw a new figure and replot the colorbar there
-    fig,ax = plt.subplots(figsize=(2,3))
-    plt.colorbar(q,ax=ax)
-    ax.remove()
-    plt.savefig(cbarfile,bbox_inches='tight')
+    # fig,ax = plt.subplots(figsize=(2,3))
+    # plt.colorbar(q,ax=ax)
+    # ax.remove()
+    # plt.savefig(cbarfile,bbox_inches='tight')
 
 #%% Main method - generate results directories
 def main():
@@ -137,8 +137,8 @@ def main():
         u,its_map = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-8, max_iter=500, verbose=verb)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        # my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
-        # my_imshow(u[314:378,444:508],'MAP details')
+        my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
+        my_imshow(u[314:378,444:508],'MAP details')
         print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its_map))
         
         #%% sample using inexact PLA
