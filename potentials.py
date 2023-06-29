@@ -134,7 +134,6 @@ class l1_loss_unshifted_homoschedastic():
         """
         # auxiliaries for tracking duality gap
         l = 1/2 * np.sum(x**2)
-        C = gamma*self(x)
         i = 0
         stopcrit = False
         
@@ -147,7 +146,7 @@ class l1_loss_unshifted_homoschedastic():
             primal = 1/2*np.sum(y**2) + gamma*self(x-y)
             dual = -1/2*np.sum((x-y)**2) + l
             dgap = primal - dual
-            stopcrit = dgap <= C*epsilon
+            stopcrit = dgap <= epsilon
             i += 1
         return x-y, i
         
@@ -364,7 +363,7 @@ class total_variation():
         tau_agd = 1
         t_agd = 0
         p_prev = np.copy(p)
-        if checkAccuracy: C = gamma * self(u)
+        # if checkAccuracy: C = gamma * self(u)
         
         if verbose: sys.stdout.write('run AGD on dual ROF model: {:3d}% '.format(0)); sys.stdout.flush()
         
@@ -385,6 +384,13 @@ class total_variation():
             p = (1-tau_agd)*q + tau_agd*w
             
             # stopping criterion: check if primal-dual gap < epsilon
+            # div_p = self._imdiv(p)
+            # h = 1/2 * np.sum(div_p**2)
+            # primal = gamma * self(u-div_p) + h
+            # norm_dual_iterate = np.sqrt(np.sum(p**2,axis=0))
+            # dual_inadmissible = np.any(norm_dual_iterate > gamma*self.scale+1e-12)
+            # dual = -np.Inf if dual_inadmissible else - h + np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
+            # dgap = primal-dual
             if checkAccuracy:
                 div_p = self._imdiv(p)
                 h = 1/2 * np.sum(div_p**2)
@@ -393,14 +399,14 @@ class total_variation():
                 dual_inadmissible = np.any(norm_dual_iterate > gamma*self.scale+1e-12)
                 dual = -np.Inf if dual_inadmissible else - h + np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
                 dgap = primal-dual
-                stopcrit = dgap <= C*epsilon
+                stopcrit = dgap <= epsilon
                 if dgap < -5e-15: # for debugging purpose
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
                 # if verbose and (i%10 == 0 or stopcrit or i==max_iter):
                 #     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
         if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
-        return (u - self._imdiv(p)), i
+        return (u - self._imdiv(p)), i, dgap
         
     
 class l2_l1_norm():

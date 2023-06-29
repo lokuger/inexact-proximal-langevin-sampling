@@ -20,10 +20,10 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100000,
+    'iterations': 100,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': 0.0,
+    'log_epsilon': -1.0,
     'step': 'large',
     'efficient': True,
     'verbose': True,
@@ -132,7 +132,7 @@ def main():
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        u,its_map = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-8, max_iter=500, verbose=verb)
+        u,its_map,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-8, max_iter=100, verbose=verb)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
@@ -145,9 +145,10 @@ def main():
             tau = 1/L
         elif params['step'] == 'small':
             tau = 0.5/L
-        epsilon = 10**params['log_epsilon']
-        n_samples = params['iterations']
+        C = tau*mu_tv*tv(u)
+        epsilon = C*(10**params['log_epsilon'])
         burnin = 50 # burnin for denoising is usually short
+        n_samples = params['iterations']+burnin
         posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
@@ -184,7 +185,7 @@ def main():
         my_imshow(y, 'noisy')
         my_imshow(u, 'map')
         my_imshow(mn, 'mean')
-        my_imshow(logstd, 'logstd')
+        my_imshow(logstd, 'logstd',-1.15,-0.58)
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         my_imsave(x,result_root+'/ground_truth.png')

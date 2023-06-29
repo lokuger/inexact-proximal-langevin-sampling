@@ -21,16 +21,17 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
-    'testfile_path': 'test_images/flintstones.png',
+    'iterations': 500,
+    'testfile_path': 'test-images/flintstones.png',
     'blurtype': 'gaussian',
-    'bandwidth': 1,
-    'noise_std': 0.20,
-    'log_epsilon': None,
+    'bandwidth': 1.5,
+    'noise_std': 0.1,
+    'log_epsilon': -6.0,
     'iter_prox': 10,
     'step': 'large',
     'efficient': True,
-    'verbose': True
+    'verbose': True,
+    'result_root': './results/denoise-tv',
     }
 
 #%% auxiliary functions
@@ -121,24 +122,24 @@ def main():
     #%% Ground truth
     # results_file = results_dir+'/result_images.npy'
     if True: #not os.path.exists(results_file): 
-        rng = default_rng(13928696)
+        rng = default_rng(1392)
         verb = params['verbose']
-        # try:
-        #     x = io.imread(params['testfile_path'],as_gray=True).astype(float)
-        # except FileNotFoundError:
-        #     print('Provided test image did not exist under that path, aborting.')
-        #     sys.exit()
-        # # handle images that are too large
-        # Nmax = 128
-        # if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
+        try:
+            x = io.imread(params['testfile_path'],as_gray=True).astype(float)
+        except FileNotFoundError:
+            print('Provided test image did not exist under that path, aborting.')
+            sys.exit()
+        # handle images that are too large
+        Nmax = 256
+        if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         
         # chess test image
-        n,t = 32, 8
-        x = np.zeros((n,n))
-        for i in np.arange(32):
-            for j in np.arange(32):
-                if (i//t)%2 == (j//t)%2:
-                    x[i,j] = 1
+        # n,t = 64, 16
+        # x = np.zeros((n,n))
+        # for i in np.arange(n):
+        #     for j in np.arange(n):
+        #         if (i//t)%2 == (j//t)%2:
+        #             x[i,j] = 1
         
         x = x-np.min(x)
         x = x/np.max(x)
@@ -166,8 +167,8 @@ def main():
         L = max_ev_ata/noise_std**2
         
         # show ground truth and corrupted image
-        # my_imshow(x,'ground truth')
-        # my_imshow(y,'noisy image')
+        my_imshow(x,'ground truth')
+        my_imshow(y,'noisy image')
         
         #%% SAPG - compute the optimal regularization parameter
         # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
@@ -206,7 +207,7 @@ def main():
         
         #%% regularization parameter
         # mu_tv = s.mean_theta[-1]          # computed by SAPG
-        mu_tv = 2.1                       # set by hand, tuned for best MAP PSNR
+        mu_tv = 1.85                       # set by hand, tuned for best MAP PSNR
             
         #%% MAP computation - L2-TV deblurring
         # deblur using PDHG in the version f(Kx) + g(x) + h(x) with smooth h
@@ -214,7 +215,7 @@ def main():
         # this matches example 5.7 - PD-explicit in Chambolle+Pock 2016
         x0_pd, y0_pd = np.zeros(x.shape), np.zeros((2,)+x.shape)
         tau_pd, sigma_pd = 1/(np.sqrt(8)+L), 1/np.sqrt(8)
-        n_iter_pd = 2000
+        n_iter_pd = 500
         f = pot.l2_l1_norm(n, n, scale=mu_tv)
         k,kt = tv._imgrad, tv._imdiv
         g = pot.zero()
@@ -225,7 +226,7 @@ def main():
         u = pd.compute(verbose=True)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        # my_imshow(u,'MAP estimate')
+        my_imshow(u,'MAP estimate')
         print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
             
         #%% sample using inexact PLA
@@ -234,10 +235,11 @@ def main():
             tau = 1/L
         elif params['step'] == 'small':
             tau = 0.5/L
-        iter_prox = params['iter_prox']
-        epsilon_prox = 10**params['log_epsilon'] if params['log_epsilon'] is not None else None
-        n_samples = params['iterations']
-        burnin = 1000
+        iter_prox = np.Inf #params['iter_prox']
+        C = tau*mu_tv*tv(u)
+        epsilon_prox = C * 10**params['log_epsilon'] if params['log_epsilon'] is not None else None
+        burnin = 200
+        n_samples = params['iterations']+burnin
         posterior = pds.l2_deblur_tv(n, n, a, at, max_ev_ata, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
@@ -245,19 +247,21 @@ def main():
         ipla = inexact_pla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
-        if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         #%% plots
         # diagnostic plot, making sure the sampler looks plausible
-        # plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
-        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
-        # plt.show()
+        plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
+        plt.show()
         # plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
         # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         # plt.show()
         # plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
         # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         # plt.show()
+        plt.plot(np.arange(1,n_samples+1), ipla.dgap_vals)
+        plt.title('duality gap values')
+        plt.show()
         
         my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
         logstd = np.log10(ipla.std)

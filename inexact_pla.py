@@ -60,6 +60,7 @@ class inexact_pla():
         
         # diagnostic checks
         self.logpi_vals = np.zeros((self.n_iter,))
+        self.dgap_vals = np.zeros((self.n_iter,))
         self.num_prox_its_total = 0
     
     def simulate(self, verbose=False):
@@ -101,7 +102,8 @@ class inexact_pla():
             if self.exact:
                 self.x, num_prox_its = self.prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size), 0
             else:
-                self.x, num_prox_its = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
+                # self.x, num_prox_its = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
+                self.x, num_prox_its, self.dgap_vals[self.iter-1] = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
             self.dfx = self.df(self.x)
             self.logpi_vals[self.iter-1] = self.f(self.x) + self.g(self.x)
             if self.iter > self.burnin:
