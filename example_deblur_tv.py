@@ -26,12 +26,12 @@ params = {
     'blurtype': 'gaussian',
     'bandwidth': 1.5,
     'noise_std': 0.1,
-    'log_epsilon': -6.0,
-    'iter_prox': 10,
+    'log_epsilon': -4.0,
+    'iter_prox': np.Inf,
     'step': 'large',
     'efficient': True,
     'verbose': True,
-    'result_root': './results/denoise-tv',
+    'result_root': './results/deblur-tv',
     }
 
 #%% auxiliary functions
@@ -108,16 +108,14 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
 
 #%% Main method - generate results directories
 def main():
-    # if not os.path.exists('./results'): os.makedirs('./results')
-    # if not os.path.exists('./results/deblur_tv'): os.makedirs('./results/deblur_tv')
-    # accuracy_dir = './results/deblur_tv/{}prox_iters'.format(params['iter_prox'])
-    # if not os.path.exists(accuracy_dir): os.makedirs(accuracy_dir)
-    # step_dir = accuracy_dir + '/{}_steps'.format(params['step'])
-    # if not os.path.exists(step_dir): os.makedirs(step_dir)
-    # sample_dir = step_dir + '/{}samples'.format(params['iterations'])
-    # if not os.path.exists(sample_dir): os.makedirs(sample_dir)
-    # results_dir = sample_dir + '/{}'.format(params['testfile_path'].split('/')[-1].split('.')[0])
-    # if not os.path.exists(results_dir): os.makedirs(results_dir)
+    result_root = params['result_root']
+    
+    test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
+    accuracy = 'log-epsilon{}'.format(params['log_epsilon'])
+    file_specifier = '{}_{}_{}-samples'.format(test_image_name,accuracy,params['iterations'])
+    results_file = result_root+'/'+file_specifier+'.npy'
+    mmse_file = result_root+'/mmse_'+file_specifier+'.png'
+    logstd_file = result_root+'/logstd_'+file_specifier+'.png' 
         
     #%% Ground truth
     # results_file = results_dir+'/result_images.npy'
@@ -215,7 +213,7 @@ def main():
         # this matches example 5.7 - PD-explicit in Chambolle+Pock 2016
         x0_pd, y0_pd = np.zeros(x.shape), np.zeros((2,)+x.shape)
         tau_pd, sigma_pd = 1/(np.sqrt(8)+L), 1/np.sqrt(8)
-        n_iter_pd = 500
+        n_iter_pd = 1000
         f = pot.l2_l1_norm(n, n, scale=mu_tv)
         k,kt = tv._imgrad, tv._imdiv
         g = pot.zero()
@@ -235,7 +233,7 @@ def main():
             tau = 1/L
         elif params['step'] == 'small':
             tau = 0.5/L
-        iter_prox = np.Inf #params['iter_prox']
+        iter_prox = params['iter_prox']
         C = tau*mu_tv*tv(u)
         epsilon_prox = C * 10**params['log_epsilon'] if params['log_epsilon'] is not None else None
         burnin = 200
@@ -270,24 +268,24 @@ def main():
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
         
         #%% saving
-        # np.save(results_file,(x,y,u,ipla.mean,ipla.std))
+        np.save(results_file,(x,y,u,ipla.mean,ipla.std))
         
-    # else:
-    #     #%% results were already computed, show images
-    #     x,y,u,mn,std = np.load(results_file)
-    #     logstd = np.log10(std)
-    #     # my_imsave(x, results_dir+'/ground_truth.png')
-    #     # my_imsave(y, results_dir+'/noisy.png')
-    #     # my_imsave(u, results_dir+'/map.png')
-    #     # my_imsave(mn, results_dir+'/posterior_mean.png')
-    #     # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.33,-0.83)
+    else:
+        #%% results were already computed, show images
+        x,y,u,mn,std = np.load(results_file)
+        logstd = np.log10(std)
+        # my_imsave(x, results_dir+'/ground_truth.png')
+        # my_imsave(y, results_dir+'/noisy.png')
+        # my_imsave(u, results_dir+'/map.png')
+        # my_imsave(mn, results_dir+'/posterior_mean.png')
+        # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.33,-0.83)
         
-    #     # my_imshow(x, 'ground truth')
-    #     # my_imshow(y, 'blurred & noisy')
-    #     # my_imshow(u, 'map estimate')
-    #     my_imshow(mn, 'post. mean / mmse estimate', results_dir+'/cbar.pdf')
-    #     my_imshow(logstd, 'posterior log std',results_dir+'/cbar_std.pdf',-1.33,-0.83)
-    #     print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+        my_imshow(x, 'ground truth')
+        my_imshow(y, 'blurred & noisy')
+        my_imshow(u, 'map estimate')
+        my_imshow(mn, 'post. mean / mmse estimate')
+        my_imshow(logstd, 'posterior log std', -1.33, -0.83)
+        print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         
 #%% help function for calling from command line
@@ -300,19 +298,20 @@ def print_help():
     print('    -h (--help): Print help.')
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
-    print('    -e (--efficientOff): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
+    print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
     print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
     print('    -p (--iter_prox=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
     print('    -s (--step=): \'large\' for 1/L or \'small\' for 0.5/L')
+    print('    -d (--result_dir=): root directory for results. Default: ./results/deblur-wavelets')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:p:s:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:p:s:d:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficientOff","log_epsilon=",
-                                    "iter_prox=","step=","verbose"])
+                                    "efficient_off","log_epsilon=",
+                                    "step=","result_dir=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -325,18 +324,14 @@ if __name__ == '__main__':
             params['iterations'] = int(arg)
         elif opt in ("-f", "--testfile_path"):
             params['testfile_path'] = arg
-        elif opt in ("-e","--efficientOff"):
+        elif opt in ("-e","--efficient_off"):
             params['efficient'] = False
         elif opt in ("-l", "--log_epsilon"):
             params['log_epsilon'] = float(arg)
         elif opt in ("-p", "--iter_prox"):
-            params['iter_prox'] = int(arg)
-        elif opt in ["-s", "--step="]:
-            if arg in ['large','small']:
-                params['step'] = arg
-            else:
-                print('Unknown step size specifier')
-                sys.exit()
+            params['step'] = arg
+        elif opt in ("-d","--result_dir"):
+            params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
     main()

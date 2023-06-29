@@ -20,10 +20,10 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100,
+    'iterations': 10000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': -1.0,
+    'log_epsilon': -2.0,
     'step': 'large',
     'efficient': True,
     'verbose': True,
@@ -158,14 +158,14 @@ def main():
         
         #%% plots
         # diagnostic plot, making sure the sampler looks plausible
-        plt.figure()
-        plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
-        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
-        plt.show()
-        plt.figure()
-        plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
-        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        plt.show()
+        # plt.figure()
+        # plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
+        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
+        # plt.show()
+        # plt.figure()
+        # plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
+        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        # plt.show()
         
         my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
         my_imshow(ipla.mean[314:378,444:508],'sample mean details')
@@ -181,9 +181,9 @@ def main():
         x,y,u,mn,std = np.load(results_file)
         logstd = np.log10(std)
         
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'noisy')
-        my_imshow(u, 'map')
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'noisy')
+        # my_imshow(u, 'map')
         my_imshow(mn, 'mean')
         my_imshow(logstd, 'logstd',-1.15,-0.58)
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
