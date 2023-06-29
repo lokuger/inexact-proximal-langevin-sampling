@@ -20,10 +20,10 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
+    'iterations': 100000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': -2.0,
+    'log_epsilon': -1.0,
     'step': 'large',
     'efficient': True,
     'verbose': True,

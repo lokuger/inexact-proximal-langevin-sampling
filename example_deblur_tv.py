@@ -21,7 +21,7 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 500,
+    'iterations': 100000,
     'testfile_path': 'test-images/flintstones.png',
     'blurtype': 'gaussian',
     'bandwidth': 1.5,
@@ -119,7 +119,7 @@ def main():
         
     #%% Ground truth
     # results_file = results_dir+'/result_images.npy'
-    if True: #not os.path.exists(results_file): 
+    if not os.path.exists(results_file): 
         rng = default_rng(1392)
         verb = params['verbose']
         try:
@@ -280,11 +280,11 @@ def main():
         # my_imsave(mn, results_dir+'/posterior_mean.png')
         # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.33,-0.83)
         
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'blurred & noisy')
-        my_imshow(u, 'map estimate')
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'blurred & noisy')
+        # my_imshow(u, 'map estimate')
         my_imshow(mn, 'post. mean / mmse estimate')
-        my_imshow(logstd, 'posterior log std', -1.33, -0.83)
+        my_imshow(logstd, 'posterior log std', -0.6, -0.25)
         print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         
