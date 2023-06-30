@@ -16,4 +16,4 @@ where $X^k$ is the sample at time step $k$ with step size $\gamma$, and $\approx
 - Auxiliary files used to compute MAP estimates, optimal regularization parameters and asymptotically unbiased samples are located in pdhg.py, sapg.py, pxmala.py.
 
 
-[1] to appear :)
+[1] to appear within the coming days :)
