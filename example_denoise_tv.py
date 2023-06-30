@@ -13,7 +13,7 @@ import sys, getopt, os
 #from time import time
 from skimage import io, transform
 
-from inexact_pla import inexact_pla
+from inexact_pgla import inexact_pgla
 # from sapg import sapg
 import potentials as pot
 import distributions as pds
@@ -152,7 +152,7 @@ def main():
         posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
-        ipla = inexact_pla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff)
+        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         

@@ -11,7 +11,7 @@ from numpy.random import default_rng
 import sys, getopt, os
 import ot
 
-from inexact_pla import inexact_pla
+from inexact_pgla import inexact_pgla
 from pxmala import pxmala
 import distributions as pds
 
@@ -108,9 +108,9 @@ def main():
                 progress = int(ic/n_chains*100)
                 if verb: sys.stdout.write('\b'*5 + '{:3d}% '.format(progress)); sys.stdout.flush()
                 if epsilon == 0:
-                    sampler = inexact_pla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, exact=True, efficient=True, output_iterates=K)
+                    sampler = inexact_pgla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, exact=True, efficient=True, output_iterates=K)
                 else:
-                    sampler = inexact_pla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon, efficient=True, output_iterates=K)
+                    sampler = inexact_pgla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon, efficient=True, output_iterates=K)
                 sampler.simulate(verbose=False)
                 samples_K[:,ic] = sampler.output_iterates
             W2sq = np.zeros((len(K),))
@@ -124,7 +124,7 @@ def main():
                 progress = int(ic/n_chains*100)
                 if verb: sys.stdout.write('\b'*5 + '{:3d}% '.format(progress)); sys.stdout.flush()
                 epsilon_prox = lambda n: n**epsilon_rate
-                sampler = inexact_pla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon_prox, efficient=True, output_iterates=K)
+                sampler = inexact_pgla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon_prox, efficient=True, output_iterates=K)
                 sampler.simulate(verbose=False)
                 samples_K[:,ic] = sampler.output_iterates
                     

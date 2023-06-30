@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+import warnings
     
 class l2_loss_homoschedastic():
     """
@@ -159,100 +160,6 @@ class l1_loss_unshifted_homoschedastic():
     def conj_prox(self, p, gamma):
         return p/np.maximum(1,np.abs(p)/self.scale)
     
-
-# class L1loss_scaled():
-#     """
-#     symbolizes the L1-norm, weighted by a parameter scale. Used for 
-#     L1-regularization or the Laplace distribution
-#     G(u) = scale * ||u - mu||_1
-#     """
-#     def __init__(self, d = None, mu = None, scale = 1):
-#         if d is None and mu is None:
-#             raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
-        
-#         # infer dimension by parameters
-#         self.d = d if d is not None else mu.shape[0]
-        
-#         # set distribution parameters
-#         self.mu = mu if mu is not None else np.zeros((self.d,1))
-#         self.scale = scale
-    
-#     def __call__(self, x):
-#         return np.sum(np.abs(x-self.mu),axis=0,keepdims=True)*self.scale
-    
-#     def grad(self, x):
-#         raise NotImplementedError("L1norm does not have a gradient, use prox operator instead!")
-    
-#     def prox(self, x, gamma = 1):
-#         return np.sign(x-self.mu) * np.maximum(0, np.abs(x-self.mu)-gamma*self.scale) + self.mu
-    
-#     def inexact_prox(self, x, gamma = 1, epsilon=None, maxiter=1e2, verbose=False):
-#         """Careful, noticed that this implementation is only correct if 
-#         self.mu = 0. Of course, this is the interesting case """
-#         gamma *= self.scale
-#         checkAccuracy = epsilon is not None
-#         # iterative scheme to minimize the dual objective
-#         y = np.zeros_like(x)  # solve for solution y of the dual using proximal gradient descent
-#         stopcrit = False
-#         tauprime = 0.99
-#         tau = 1  # tau = 1 would be the most efficient but we want to make the routine artificially bad! Recheck this later.
-#         i = 0
-#         if checkAccuracy and verbose:
-#             print('Run (backward) gradient descent on the dual Lasso with gamma*mu = {:.3e}'.format(gamma))
-#             print('|{:^11s}|{:^31s}|'.format('Iterate','D-Gap (stop if < {:.3e})'.format(epsilon)))
-#         while i < maxiter and not stopcrit:
-#             i = i + 1
-#             v = (1-tauprime)*y + tauprime*x
-#             n = np.abs(v)
-#             w = v/np.maximum(1,1/gamma * n)
-#             # explicit gradient descent step on the Moreau-Yosida regularization: Gradient is y-w, see Chambolle, Pock 2016
-#             y = y - tau*(y - w)
-#             if checkAccuracy:
-#                 halfsquarednormy = 1/2 * np.sum(y**2)
-#                 # compute primal dual gap here and check if smaller than epsilon
-#                 P = gamma * self(x-y)[0,0] + halfsquarednormy # primal value
-#                 ndual = np.sqrt(y**2)
-#                 dualInadmissible = np.any(ndual > gamma+1e-15)
-#                 Pconj = np.Inf if dualInadmissible else halfsquarednormy - np.sum(y * x)
-#                 dgap = P+Pconj
-#                 stopcrit = dgap < epsilon
-#                 if verbose and (i%25 == 0 or stopcrit):
-#                     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
-#         return x - y
-        
-# class KLDistance():
-#     """
-#     Kullback Leibler distance KL(Ku+b, v)
-#     with background b,
-#     data observation v,
-#     linear transformation K.
-#     """
-#     def __init__(self, data = None, background = None, K = None):
-#         self.v = data
-#         self.m = self.v.shape[0]
-#         self.d = K.shape[1] if K is not None else self.v.shape[0]
-#         self.b = background if background is not None else np.zeros((self.m,1))
-#         self.K = K if K is not None else np.eye(self.d)
-        
-#     def __call__(self, u):
-#         Ku = self.K @ u
-#         # be careful with this next line - it is here since the stepsize 
-#         # backtracking naturally jumps too far and considers points u where 
-#         # Ku < 0. We set these to the corresponding axis to prevent warnings.
-#         Ku[Ku<0] = 0
-#         # from here everything's fine again
-#         Kub = Ku + self.b
-#         return np.sum(Kub - self.v + self.v*np.log(self.v/Kub), axis=0)
-    
-#     def grad(self, u):
-#         """
-#         The KL distance is gradient Lipschitz with constant L; where the best (smallest)
-#         L can be bounded by the easily computable constant
-#         v_1/(b_1^2) * norm(K_1)^2 + ... + v_m/(b_m^2) * norm(K_m)^2
-#         where K_i are the lines of the matrix K. See Obsidian notes for details
-#         """
-#         Kub = self.K @ u + self.b
-#         return self.K.T @ (np.ones_like(self.v) - self.v/Kub)
     
 class total_variation():
     """
@@ -384,13 +291,6 @@ class total_variation():
             p = (1-tau_agd)*q + tau_agd*w
             
             # stopping criterion: check if primal-dual gap < epsilon
-            # div_p = self._imdiv(p)
-            # h = 1/2 * np.sum(div_p**2)
-            # primal = gamma * self(u-div_p) + h
-            # norm_dual_iterate = np.sqrt(np.sum(p**2,axis=0))
-            # dual_inadmissible = np.any(norm_dual_iterate > gamma*self.scale+1e-12)
-            # dual = -np.Inf if dual_inadmissible else - h + np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
-            # dgap = primal-dual
             if checkAccuracy:
                 div_p = self._imdiv(p)
                 h = 1/2 * np.sum(div_p**2)
@@ -403,8 +303,6 @@ class total_variation():
                 if dgap < -5e-15: # for debugging purpose
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
-                # if verbose and (i%10 == 0 or stopcrit or i==max_iter):
-                #     print('|{:^11d}|{:^31.3e}|'.format(i,dgap))
         if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
         return (u - self._imdiv(p)), i, dgap
         
@@ -439,20 +337,20 @@ class l2_l1_norm():
         return p/np.maximum(1,1/self.scale*n)
 
     
-# class nonNegIndicator():
-#     """ 
-#     Indicator function of R_++^d, 0 if all entries are >= 0, otherwise infinity
-#     """
-#     def __init__(self, d):
-#         self.d = d
+class nonNegIndicator():
+    """ 
+    Indicator function of R_++^d, 0 if all entries are >= 0, otherwise infinity
+    """
+    def __init__(self, d):
+        self.d = d
     
-#     def __call__(self, x):
-#         with warnings.catch_warnings():
-#             warnings.filterwarnings("ignore", message="invalid value encountered in multiply")
-#             return np.nan_to_num(np.infty * (1-(np.min(x, axis=0) >= 0)), 0)
+    def __call__(self, x):
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="invalid value encountered in multiply")
+            return np.nan_to_num(np.infty * (1-(np.min(x, axis=0) >= 0)), 0)
         
-#     def prox(self, x, gamma):
-#         return np.maximum(x,0)
+    def prox(self, x, gamma):
+        return np.maximum(x,0)
     
 class zero():
     """ a dummy class if we want to set one of the potential terms to zero"""
@@ -465,142 +363,3 @@ class zero():
     def prox(self, x, gamma):
         return x
     
-# class l2_loss_heteroschedastic():
-#     """
-#     symbolizes the weighted l2-norm for d-dimensional vectors. Is used to generate 
-#     normal distributions and the data-fidelity/log-likelihood in problems with 
-#     Gaussian noise.
-#     """
-#     def __init__(self, d = None, mu = None, Var = None):
-#         if d is None and mu is None and Var is None:
-#             raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
-#         # infer dimension from parameters
-#         self.d = d if d is not None else (mu.shape[0] if mu is not None else Var.shape[0])
-               
-#         # set distribution parameters
-#         self.mu = mu if mu is not None else np.zeros((self.d,1))
-#         if Var is None:
-#             self.Var = np.eye(self.d)
-#             self.Prec = np.eye(self.d)
-#         elif np.isscalar(Var):
-#             self.Var = Var*np.eye(self.d)
-#             self.Prec = 1/Var*np.eye(self.d)
-#         else:
-#             self.Var = Var
-#             self.Prec = np.linalg.inv(self.Var)
-    
-#     def __call__(self, x):
-#         return 1/2 * np.sum((x-self.mu) * (self.Prec @ (x-self.mu)), axis=0)
-    
-#     def grad(self, x):
-#         return self.Prec @ (x-self.mu)
-    
-#     def prox(self, x, gamma = 1):
-#         return np.linalg.solve(self.Var+gamma*np.eye(self.d), self.Var@x + gamma*self.mu)
-    
-#     def conj(self, y):
-#         return 1/2 * np.sum(y * self.Var @ y, axis=0) + np.sum(y * self.mu, axis=0)
-    
-#     def conjProx(self, x, gamma = 1):
-#         return np.linalg.solve(np.eye(self.d)+gamma*self.Var, x-gamma*self.mu)
-    
-# class Log_Gamma1D():
-#     """
-#     negative Log-density of a 1D Gamma distribution with parameters
-#     - shape: alpha > 0
-#     - rate: beta > 0
-#     """
-#     def __init__(self, alpha = 1, beta = 0.5):
-#         self.alpha = alpha
-#         self.beta = beta
-    
-#     def __call__(self, x):
-#         admissible_idcs = x>0
-#         r = np.inf*np.ones_like(x)
-#         r[admissible_idcs] = (1-self.alpha)*np.log(x[admissible_idcs]) + self.beta * x[admissible_idcs]
-#         return r
-    
-#     def prox(self, x, gamma = 1):
-#         return x/2 - self.beta*gamma/2 + np.sqrt(
-#             1/4* (x**2) - x*self.beta*gamma/2 + (self.beta**2)*(gamma**2)/4 - gamma*(1-self.alpha))
-    
-#     def inexact_prox(self, x, gamma = 1, epsilon=None, maxiter=1e3):
-#         """comment: we do actually know the exact prox (see above), 
-#         this is only to compare inexact psgla and psgla
-#         The inexact prox computes the prox by iteratively solving the dual
-#         problem using gradient descent.
-#         The dual problem is given by
-#         - min_v {(gamma*v - x)^2/(2*gamma) - x^2/(2*gamma) + (alpha-1)*(log((alpha-1)/(beta-v)) - 1)}
-#             =: - min_v Psi_gamma(v)
-#         Once the dual solution v is approximated, the approximation to the 
-#         prox evaluation is   x - gamma*v
-#         Check the accuracy by bounding the duality gap Phi(y)+Psi(v)
-#         """
-#         checkAccuracy = True if epsilon is not None else False
-#         # iterative scheme to minimize the dual objective
-#         v = np.zeros_like(x)    # function is only defined on [-Inf, beta], beta > 0, hence initilizing at 0 might be safe
-#         stopcrit = np.full(x.shape, False)
-#         tau = 1/(gamma + (self.alpha-1)/(self.beta**2)) # since optimal v < 0 and initialize at 0, this is lower bound for 1/L
-#         i = 0
-#         while i < maxiter and not np.all(stopcrit):
-#             i = i + 1
-#             # update v
-#             v[~stopcrit] = v[~stopcrit] - tau * (gamma*v[~stopcrit] - x[~stopcrit] + (1-self.alpha)/(v[~stopcrit]-self.beta))
-#             if checkAccuracy:
-#                 # compute primal dual gap here and check if smaller than epsilon
-#                 P = self(x-gamma*v) + gamma/2 * v**2  # primal value
-#                 Pconj = ((gamma*v-x)**2)/(2*gamma) - (x**2)/(2*gamma) + (self.alpha-1)*(np.log((self.alpha-1)/(self.beta-v)) - 1)
-#                 stopcrit = P + Pconj < epsilon
-#         return x - gamma*v
-        
-
-# class MY_Log_Gamma1D():
-#     """
-#     negative Log-density of a 1D Gamma distribution with parameters
-#     - shape: alpha > 0
-#     - rate: beta > 0
-#     Only need this class to check whether the MYULA implementation works and 
-#     converges to its (biased) target.
-#     """
-#     def __init__(self, alpha = 1, beta = 0.5, gamma = 1):
-#         self.alpha = alpha
-#         self.beta = beta
-#         self.gamma = gamma
-#         self.unsmoothed_pot = Log_Gamma1D(alpha, beta)
-    
-#     def __call__(self, x):
-#         prox_vals = self.unsmoothed_pot.prox(x, self.gamma)
-#         return self.unsmoothed_pot(prox_vals) + 1/(2*self.gamma)*np.sum((x-prox_vals)**2, axis=0)
-    
-#     def prox(self, x, gamma = 1):
-#         raise NotImplementedError("Please don't try to compute the prox of an already MY-regularized function")
-        
-# class MY_L1loss_scaled():
-#     """
-#     Moreau-Yosida regularization of L1-loss with parameter gamma 
-#     This equals the Huber loss. Only need this class to check whether the 
-#     MYULA implementation works and converges to its (biased) target
-#     """
-#     def __init__(self, gamma = 1, d=None, mu = None, b = None):
-#         if d is None and mu is None:
-#             raise ValueError("Please supply dimension or parameters from which dimension can be inferred!")
-#         self.d = d if d is not None else mu.shape[0]
-#         self.mu = mu if mu is not None else np.zeros((self.d,1))
-#         self.b = b if b is not None else 1
-#         self.gamma = gamma
-#         self.unsmoothed_pot = L1loss_scaled(d=self.d,mu=self.mu,b=self.b)
-    
-#     def __call__(self, x):
-#         prox_vals = self.unsmoothed_pot.prox(x, self.gamma)
-#         return self.unsmoothed_pot(prox_vals) + 1/(2*self.gamma)*np.sum((x-prox_vals)**2, axis=0)
-#         #return np.sum(
-#         #    (np.abs(x-self.mu) > self.gamma/self.b)*(np.abs(x-self.mu) - self.gamma/(2*self.b))
-#         #        + (np.abs(x-self.mu) <= self.gamma/self.b)*(self.b/(2*self.gamma) * (x-self.mu)**2)
-#         #    ,axis=0)
-    
-#     def grad(self, x):
-#         return ( (np.abs(x-self.mu) > self.gamma/self.b)*np.sign(x-self.mu)
-#                 + (np.abs(x-self.mu) <= self.gamma/self.b)*self.b/self.gamma * (x-self.mu) )
-    
-#     def prox(self, x, gamma = 1):
-#         raise NotImplementedError("Please don't try to compute the prox of an already MY-regularized function")

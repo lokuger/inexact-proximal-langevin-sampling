@@ -3,7 +3,7 @@ from numpy.random import default_rng
 import sys
 import matplotlib.pyplot as plt
 
-class inexact_pla():
+class inexact_pgla():
     """
     Instance of the inexact proximal Langevin algorithm
     __init__ parameters:
