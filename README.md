@@ -5,7 +5,7 @@ This repository implements a Langevin sampling algorithm that includes the evalu
 ## The algorithm
 For a target distribution with density proportional to exp(-F(x)-G(x)), with smooth F and potentially non-smooth G, the sampling algorithm takes the form
 
-$$  X^{k+1} \approx^{\epsilon_k} \prox_{\gamma G}(X^k - \gamma \nabla F(X^k) + \sqrt{2\gamma}\,\xi^k),\quad \xi^k \sim \mathrm{N}(0,I_d). $$
+$$  X^{k+1} \approx^{\epsilon_k} \mathrm{prox}_{\gamma G}(X^k - \gamma \nabla F(X^k) + \sqrt{2\gamma}\,\xi^k),\quad \xi^k \sim \mathrm{N}(0,I_d). $$
 
 where $X^k$ is the sample at time step $k$ with step size $\gamma$, and $\approx^{\epsilon_k}$ denotes that we only evaluate the proximal mapping only inexactly up to error level $\epsilon_k$.
 
