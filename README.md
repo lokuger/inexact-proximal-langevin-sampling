@@ -16,4 +16,4 @@ where $X^k$ is the sample at time step $k$ with step size $\gamma$, and $\approx
 - Auxiliary files used to compute MAP estimates, optimal regularization parameters and asymptotically unbiased samples are located in pdhg.py, sapg.py, pxmala.py.
 
 
-[1] to appear within the coming days :)
+[1] Ehrhardt, M.J., Kuger, L., Schönlieb, C.-B., "Proximal Langevin Sampling With Inexact Proximal Mapping", Preprint, 2023. [arxiv.org/abs/2306.17737](https://arxiv.org/abs/2306.17737)
