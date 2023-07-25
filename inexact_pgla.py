@@ -20,7 +20,7 @@ class inexact_pgla():
         - exact (False)         : if pd.g has an exact proximal operator, can choose True and run exact PGLA
         
     """
-    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, output_iterates=None, exact=False):
+    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, output_iterates=None, output_means=None, exact=False):
         self.n_iter = n_iter
         self.burnin = burnin
         self.iter = 0
@@ -34,13 +34,22 @@ class inexact_pgla():
             self.x = np.copy(x0)
             self.sum = np.zeros(self.shape_x)
             self.sum_sq = np.zeros(self.shape_x)
-            # in efficient mode, there is the option to output a selected number of iterates at given indices
+            # in efficient mode, there is the option to output a selected number of iterates or running means at given indices
+            # self.I contains the indices of returned iterates
             if output_iterates is not None:
-                self.I = output_iterates
+                self.I_output_iterates = output_iterates
             else:
-                self.I = np.reshape(self.n_iter,(1,))   # output last sample if nothing specified
-            n_outputs = np.size(self.I)
+                self.I_output_iterates = np.reshape(self.n_iter,(1,))   # output last sample if nothing specified
+            n_outputs = np.size(self.I_output_iterates)
             self.output_iterates = np.zeros(self.shape_x+(n_outputs,))
+            if output_means is not None:
+                self.I_output_means = output_means[output_means > burnin]
+                if np.any(output_means <= burnin):
+                    print('Trying to return running means before end of burnin time. I\'ll remove these indices for you.')
+            else:
+                self.I_output_means = np.reshape(self.n_iter,(1,))   # output last running mean if nothing specified
+            n_means = np.size(self.I_output_means)
+            self.output_means = np.zeros(self.shape_x+(n_means,))
         else:
             self.x = np.zeros(self.shape_x+(self.n_iter+1,))
             self.x[...,0] = x0
@@ -65,12 +74,17 @@ class inexact_pgla():
     
     def simulate(self, verbose=False):
         if verbose: sys.stdout.write('run inexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
-        i = 0
+        i,j = 0,0
         while self.iter < self.n_iter:
             self.update()
-            if self.eff and self.iter in self.I:
+            # potentially save iterate
+            if self.eff and self.iter in self.I_output_iterates:
                 self.output_iterates[...,i] = self.x
                 i+=1
+            # potentially save running mean
+            if self.eff and self.iter in self.I_output_means:
+                self.output_means[...,j] = self.sum/(self.iter-self.burnin)
+                j+=1
             if verbose and self.iter%20==0: 
                 progress = int(self.iter/self.n_iter*100)
                 sys.stdout.write('\b'*5 + '{:3d}% '.format(progress))
@@ -117,5 +131,6 @@ class inexact_pgla():
             self.dfx = self.df(self.x[...,self.iter])
             self.logpi_vals[self.iter-1] = self.f(self.x[...,self.iter]) + self.g(self.x[...,self.iter])
         
-        self.num_prox_its_total += num_prox_its
+        if self.iter > self.burnin:
+            self.num_prox_its_total += num_prox_its
         

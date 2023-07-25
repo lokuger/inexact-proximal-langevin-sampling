@@ -23,8 +23,8 @@ params = {
     'iterations': 100000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': -1.0,
-    'step': 'large',
+    'log_epsilon': -2.0,
+    'step': 'tiny',
     'efficient': True,
     'verbose': True,
     'result_root': './results/denoise-tv',
@@ -42,6 +42,7 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
     plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
     q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
     plt.axis('off')
+    # plt.title(label)
     if cbar: fig.colorbar(q)
     plt.show()
     
@@ -89,8 +90,8 @@ def main():
         L = 1/noise_std**2
         
         # show ground truth and corrupted image
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'noisy image')
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'noisy image')
         
         #%% SAPG - compute the optimal regularization parameter
         # unscaled_posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=1)
@@ -128,15 +129,15 @@ def main():
         
         #%% regularization parameter
         # mu_tv = s.mean_theta[-1]          # computed by SAPG
-        mu_tv = 4.3                        # set by hand, optimized for highest PSNR of MAP
+        mu_tv = 6                        # set by hand, optimized for highest PSNR of MAP
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
         u,its_map,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-8, max_iter=100, verbose=verb)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
-        my_imshow(u[314:378,444:508],'MAP details')
+        # my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
+        # my_imshow(u[314:378,444:508],'MAP details')
         print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its_map))
         
         #%% sample using inexact PLA
@@ -145,6 +146,8 @@ def main():
             tau = 1/L
         elif params['step'] == 'small':
             tau = 0.5/L
+        elif params['step'] == 'tiny':
+            tau = 0.1/L
         C = tau*mu_tv*tv(u)
         epsilon = C*(10**params['log_epsilon'])
         burnin = 50 # burnin for denoising is usually short
@@ -152,9 +155,23 @@ def main():
         posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
-        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff)
+        output_means = np.arange(51, 151, 20)
+        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, output_means=output_means)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
+        
+        n_means,output_means = ipla.output_means.shape[-1],ipla.I_output_means
+        for i in np.arange(n_means):
+            my_imshow(ipla.output_means[...,i], 'Running mean at iteration {}'.format(i))
+            
+        # plot mmse errors over the iterations
+        # suppose mmse is given, for now use the map instead, later load it from a long precomputed chain
+        # mmse = u
+        # mmse_err = np.zeros((n_means,))
+        # for i in np.arange(n_means):
+        #     mmse_err[i] = np.sqrt(np.sum((mmse-ipla.output_means[...,i])**2)/np.sum((mmse)**2))
+        # plt.figure()
+        # plt.plot(output_means,mmse_err)
         
         #%% plots
         # diagnostic plot, making sure the sampler looks plausible
@@ -173,7 +190,7 @@ def main():
         my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
         my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
-        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
+        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
         
         #%% saving
         np.save(results_file,(x,y,u,ipla.mean,ipla.std))

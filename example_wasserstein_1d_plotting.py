@@ -10,21 +10,21 @@ import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 12})
 
 params = {
-    'step_type': 'fixed', # 'decay'
-    'inexactness_type': 'fixed', # 'decay'
+    'step_type': 'fixed', # 'decay' or 'fixed'
+    'inexactness_type': 'decay', # 'decay' or 'fixed'
     }
 
 def main():
     ax = plt.axes()
     # ax.set_title('Squared Wasserstein-2 distances')
-    ax.set_xscale("log")
+    # ax.set_xscale("log")
     ax.set_xlabel(r'$k$')
     ax.set_yscale("log")
     ax.set_ylabel(r'$\mathcal{W}_2^2(\tilde\mu^{k},\tilde\mu^{\ast})$')
     colors = ['b','r','g','y','m','c','k','r']
     markers = ['^','v','o','s','*','H','X','D']
     
-    res_dir = './results/1dwasserstein/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']+'/'
+    res_dir = './results/wasserstein-dists-validation/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']+'/'
     if params['inexactness_type'] == 'fixed':
         if params['step_type'] == 'fixed':
             epsilons = np.array([0.5, 0.25, 0.1, 0.05])#10.0**(-np.arange(0.0,3.0))   #tbc

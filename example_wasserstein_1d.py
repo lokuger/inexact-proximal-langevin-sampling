@@ -53,7 +53,7 @@ def main():
     if True:
         #%% generate data - artificial image with pixels drawn from Laplace distribution
         # fix the seed here so that the posterior remains the same for different runs of the script
-        rng = default_rng(65654)
+        rng = default_rng(65654) if params['inexactness_type'] == 'fixed' else default_rng(43562) # makes sure two experiments don't use same seed, but lines in same experiments do
         verb = params['verbose']
         
         l1scale = 1
