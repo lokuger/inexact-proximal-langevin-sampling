@@ -20,11 +20,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100000,
+    'iterations': 50,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': -2.0,
-    'step': 'tiny',
+    'log_epsilon': 1.0,
+    'step': 'large',
     'efficient': True,
     'verbose': True,
     'result_root': './results/denoise-tv',
@@ -42,7 +42,7 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
     plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
     q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
     plt.axis('off')
-    # plt.title(label)
+    plt.title(label)
     if cbar: fig.colorbar(q)
     plt.show()
     
@@ -55,6 +55,8 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
 #%% Main method - generate results directories
 def main():
     result_root = params['result_root']
+    if params['step'] == 'tiny': 
+        result_root = result_root + '/smaller_steps'
     
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
     accuracy = 'log-epsilon{}'.format(params['log_epsilon'])
@@ -90,8 +92,8 @@ def main():
         L = 1/noise_std**2
         
         # show ground truth and corrupted image
-        # my_imshow(x, 'ground truth')
-        # my_imshow(y, 'noisy image')
+        my_imshow(x, 'ground truth')
+        my_imshow(y, 'noisy image')
         
         #%% SAPG - compute the optimal regularization parameter
         # unscaled_posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=1)
@@ -129,15 +131,15 @@ def main():
         
         #%% regularization parameter
         # mu_tv = s.mean_theta[-1]          # computed by SAPG
-        mu_tv = 6                        # set by hand, optimized for highest PSNR of MAP
+        mu_tv = 8
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
         u,its_map,_ = tv.inexact_prox(y, gamma=mu_tv*noise_std**2, epsilon=1e-8, max_iter=100, verbose=verb)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        # my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
-        # my_imshow(u[314:378,444:508],'MAP details')
+        my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
+        my_imshow(u[314:378,444:508],'MAP details')
         print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its_map))
         
         #%% sample using inexact PLA
@@ -147,7 +149,7 @@ def main():
         elif params['step'] == 'small':
             tau = 0.5/L
         elif params['step'] == 'tiny':
-            tau = 0.1/L
+            tau = 0.01/L
         C = tau*mu_tv*tv(u)
         epsilon = C*(10**params['log_epsilon'])
         burnin = 50 # burnin for denoising is usually short
@@ -155,23 +157,25 @@ def main():
         posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
-        output_means = np.arange(51, 151, 20)
+        output_means = burnin+np.reshape(np.reshape(np.array([1,2,5]),(1,-1))*np.reshape(10**np.arange(6),(-1,1)),(-1,))     # 1,2,5,10,20,50,... until max number of samples is reached
+        output_means = output_means[output_means<=n_samples]
         ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, output_means=output_means)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         
-        n_means,output_means = ipla.output_means.shape[-1],ipla.I_output_means
-        for i in np.arange(n_means):
-            my_imshow(ipla.output_means[...,i], 'Running mean at iteration {}'.format(i))
+        running_means = ipla.output_means
+        n_means,I_running_means = running_means.shape[-1],ipla.I_output_means
+        # for i in np.arange(n_means):
+        #     my_imshow(running_means[...,i], 'Running mean at iteration {}'.format(i))
             
         # plot mmse errors over the iterations
         # suppose mmse is given, for now use the map instead, later load it from a long precomputed chain
         # mmse = u
         # mmse_err = np.zeros((n_means,))
         # for i in np.arange(n_means):
-        #     mmse_err[i] = np.sqrt(np.sum((mmse-ipla.output_means[...,i])**2)/np.sum((mmse)**2))
+        #     mmse_err[i] = np.sqrt(np.sum((mmse-running_means[...,i])**2)/np.sum((mmse)**2))
         # plt.figure()
-        # plt.plot(output_means,mmse_err)
+        # plt.plot(I_running_means,mmse_err)
         
         #%% plots
         # diagnostic plot, making sure the sampler looks plausible
@@ -193,14 +197,23 @@ def main():
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
         
         #%% saving
-        np.save(results_file,(x,y,u,ipla.mean,ipla.std))
+        with open(results_file,'wb') as f:
+            np.save(f,(x,y,u,ipla.mean,ipla.std))   # ground truth, noisy, map, sample mean and sample std
+            np.save(f,running_means)            # running means
+            np.save(f,I_running_means)          # indices to which these means belong
     else:
-        x,y,u,mn,std = np.load(results_file)
+        with open(results_file,'rb') as f:
+            x,y,u,mn,std = np.load(f)               # ground truth, noisy, map, sample mean and sample std
+            running_means = np.load(f)              # running means
+            I_running_means = np.load(f)            # indices to which these means belong
         logstd = np.log10(std)
         
-        # my_imshow(x, 'ground truth')
-        # my_imshow(y, 'noisy')
-        # my_imshow(u, 'map')
+        for i in np.arange(running_means.shape[-1]):
+            my_imshow(running_means[...,i], 'Running mean at iteration {}'.format(I_running_means[i])) 
+        
+        my_imshow(x, 'ground truth')
+        my_imshow(y, 'noisy')
+        my_imshow(u, 'map')
         my_imshow(mn, 'mean')
         my_imshow(logstd, 'logstd',-1.15,-0.58)
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
