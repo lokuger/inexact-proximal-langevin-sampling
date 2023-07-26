@@ -20,10 +20,10 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 50,
+    'iterations': 1000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': 1.0,
+    'log_epsilon': -1.0,
     'step': 'large',
     'efficient': True,
     'verbose': True,
@@ -159,7 +159,7 @@ def main():
         
         output_means = burnin+np.reshape(np.reshape(np.array([1,2,5]),(1,-1))*np.reshape(10**np.arange(6),(-1,1)),(-1,))     # 1,2,5,10,20,50,... until max number of samples is reached
         output_means = output_means[output_means<=n_samples]
-        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, output_means=output_means)
+        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, output_means=output_means, stop_crit=)# implement a custom evaluatable stopping criterion
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         
@@ -208,27 +208,41 @@ def main():
             I_running_means = np.load(f)            # indices to which these means belong
         logstd = np.log10(std)
         
-        for i in np.arange(running_means.shape[-1]):
-            my_imshow(running_means[...,i], 'Running mean at iteration {}'.format(I_running_means[i])) 
+        with open(result_root+'/'+'{}_log-epsilon-2.0_1000-samples.npy'.format(test_image_name),'rb') as f:
+            _,_,_,mmse,_ = np.load(f)               # ground truth, noisy, map, sample mean and sample std
         
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'noisy')
-        my_imshow(u, 'map')
-        my_imshow(mn, 'mean')
-        my_imshow(logstd, 'logstd',-1.15,-0.58)
+        n_means = running_means.shape[-1]
+        mmse_err = np.zeros((n_means,))
+        for i in np.arange(n_means):
+            # my_imshow(running_means[...,i], 'Running mean at iteration {}'.format(I_running_means[i])) 
+            mmse_err[i] = np.sqrt(np.sum((mmse-running_means[...,i])**2)/np.sum((mmse)**2))
+        ax = plt.axes()
+        ax.set_title('MMSE Error')
+        ax.set_yscale("log")
+        ax.set_xscale("log")
+        ax.plot(I_running_means,mmse_err)
+        
+        logstd_min = np.min(logstd)
+        logstd_max = np.max(logstd)
+        
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'noisy')
+        # my_imshow(u, 'map')
+        # my_imshow(mn, 'mean')
+        # my_imshow(logstd, 'logstd', logstd_min, logstd_max)
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         my_imsave(x,result_root+'/ground_truth.png')
         my_imsave(y,result_root+'/noisy.png')
         my_imsave(u,result_root+'/map.png')
         my_imsave(mn, mmse_file)
-        my_imsave(logstd, logstd_file,-1.15,-0.58)
+        my_imsave(logstd, logstd_file, logstd_min, logstd_max)
         # image details for paper close-up
         my_imsave(x[314:378,444:508], result_root+'/ground_truth_detail.png')
         my_imsave(y[314:378,444:508], result_root+'/noisy_detail.png')
         my_imsave(u[314:378,444:508], result_root+'/map_detail.png')
         my_imsave(mn[314:378,444:508], mmse_detail_file)
-        my_imsave(logstd[314:378,444:508], logstd_detail_file, -1.15,-0.58)
+        my_imsave(logstd[314:378,444:508], logstd_detail_file, logstd_min, logstd_max)
         
 #%% help function for calling from command line
 def print_help():

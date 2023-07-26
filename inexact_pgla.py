@@ -20,7 +20,7 @@ class inexact_pgla():
         - exact (False)         : if pd.g has an exact proximal operator, can choose True and run exact PGLA
         
     """
-    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, output_iterates=None, output_means=None, exact=False):
+    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, output_iterates=None, output_means=None, exact=False, stop_crit=None):
         self.n_iter = n_iter
         self.burnin = burnin
         self.iter = 0
@@ -50,6 +50,8 @@ class inexact_pgla():
                 self.I_output_means = np.reshape(self.n_iter,(1,))   # output last running mean if nothing specified
             n_means = np.size(self.I_output_means)
             self.output_means = np.zeros(self.shape_x+(n_means,))
+            if stop_crit is not None:
+                self.stop_crit = stop_crit          # TODO implement this below!
         else:
             self.x = np.zeros(self.shape_x+(self.n_iter+1,))
             self.x[...,0] = x0
