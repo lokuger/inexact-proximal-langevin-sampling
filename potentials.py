@@ -118,38 +118,38 @@ class l1_loss_unshifted_homoschedastic():
     def prox(self, x, gamma):
         return np.maximum(0, np.abs(x)-gamma*self.scale) * np.sign(x)
     
-    def inexact_prox(self, x, gamma, epsilon, max_iter=np.Inf):
+    def inexact_prox(self, u, gamma, epsilon, max_iter=np.Inf):
         """
         deliberately compute the prox inexactly here. We want to use this to
         compare the inexact version of the PGLA algorithm with the exact one.
         Prox problem - primal form:
-            min_x {gamma*scale*||x||_1 + 1/2*||x-u||^2}
+            min_x {scale*||x||_1 + 1/(2*gamma)*||x-u||^2}
         Dual problem:
-            max_{y : ||y||_infty <= gamma*scale}{-1/2*||y-u||^2} + 1/2*||u||^2
-        Hence solve argmin_{y : ||y||_infty <= gamma*scale}{1/2*||y-u||^2}:
-        The solution is the projection of u onto infty-ball of radius gamma*scale:
-            sol = gamma*self.scale/np.linalg.norm(u,np.Inf) * u
+            max_{y : ||y||_infty <= scale}{-1/(2*gamma)*||gamma*y-u||^2} + 1/(2*gamma)*||u||^2
+        Hence solve argmin_{y : ||y||_infty <= scale}{1/(2*gamma)*||gamma*y-u||^2}:
+        The solution is the projection of u/gamma onto infty-ball of radius scale
         Just approximate this from below (inside the ball) by a sequence 
             (1 - q^k) * sol
         whick converges in norm as q^k, for some 0<q<1.
         """
-        # auxiliaries for tracking duality gap
-        l = 1/2 * np.sum(x**2)
         i = 0
         stopcrit = False
         
         # this is the true solution of the dual problem
-        sol = x / np.maximum(1,np.abs(x)/(gamma*self.scale))
+        v = u / gamma
+        sol = v / np.maximum(1,np.abs(v)/self.scale)
         q = 0.5
         while not stopcrit:
-            y = (1 - q**i)*sol
+            x = (1 - q**i)*sol
             
-            primal = 1/2*np.sum(y**2) + gamma*self(x-y)
-            dual = -1/2*np.sum((x-y)**2) + l
+            r = gamma/2*np.sum(x**2)
+            primal = r + self(u-gamma*x)
+            dual = - r + np.sum(x * u) # dual value. dual iterate should never be inadmissible since we project in the end
             dgap = primal - dual
+            
             stopcrit = dgap <= epsilon
             i += 1
-        return x-y, i
+        return u-gamma*x, i
         
     def conj(self, z):
         if np.any(np.abs(z) > self.scale+1e-12):
@@ -182,9 +182,6 @@ class total_variation():
     a maximum number of steps, an accuracy (in the primal-dual gap), or both 
     to the prox evaluation, for more details see 
         total_variation.inexact_prox
-        and
-        total_variation._inexact_prox_singleImage_vanillaGD
-        total_variation._inexact_prox_singleImage_acceleratedGD
     """
     def __init__(self, n1, n2, scale=1):
         self.n1 = n1
@@ -242,13 +239,7 @@ class total_variation():
     
     def inexact_prox(self, u, gamma, epsilon=None, max_iter=np.Inf, verbose=False):
         """
-        Computing the prox of TV is solving the ROF model. See Chambolle, Pock 2016,
-        Example 4.8 for a precise description of what is done here. We are 
-        using accelerated proximal gradient descent on the dual ROF problem.
-        -- gamma is the prox parameter, hence if the TV scaling parameter mu is 
-        set to a value other than 1, solving this problem is equivalent to 
-        computing a backward gradient step (=solving ROF) with step
-            gamma * mu
+        Computing the prox of TV is solving the ROF model with FISTA
             
         inexact_prox(self, u, gamma=1, epsilon=None, maxiter=np.Inf, verbose=False)
         parameters:
@@ -263,48 +254,40 @@ class total_variation():
         checkAccuracy = True if epsilon is not None else False
         # iterative scheme to minimize the dual objective
         p = np.zeros((2,self.n1,self.n2))
-        stopcrit = False
-        tauprime = 0.99 * 1/8
-        # tau_gd = 1
-        i = 0
-        tau_agd = 1
-        t_agd = 0
-        p_prev = np.copy(p)
-        # if checkAccuracy: C = gamma * self(u)
+        q = np.copy(p)
         
-        if verbose: sys.stdout.write('run AGD on dual ROF model: {:3d}% '.format(0)); sys.stdout.flush()
+        stopcrit = False
+        t, t_prev = 1, 1
+        
+        i = 0
+        if verbose: sys.stdout.write('run FISTA on dual ROF model: {:3d}% '.format(0)); sys.stdout.flush()
         
         while i < max_iter and not stopcrit:
             i = i + 1
-            t_agd_new = (1+np.sqrt(1+4*t_agd**2))/2
-            q = p + (t_agd-1)/t_agd_new * (p - p_prev)
-            
-            # compute the gradient of Moreau-Yosida regularization at q
-            v = q - tauprime*self._imgrad(self._imdiv(q) - u)
-            s = 1/np.maximum(1, np.sqrt(np.sum(v**2,axis=0))/(gamma*self.scale))[np.newaxis,:,:]
-            w = v * s     # projection in dual norm
-            # The gradient is q-w, see Chambolle, Pock 2016
-            
-            # updates
-            t_agd = t_agd_new
             p_prev = np.copy(p)
-            p = (1-tau_agd)*q + tau_agd*w
+            
+            v = q - 1/(8*gamma) * self._imgrad(gamma*self._imdiv(q) - u)
+            p = v/np.maximum(1, np.sqrt(np.sum(v**2,axis=0))/self.scale)[np.newaxis,:,:]
+            
+            t_new = (1+np.sqrt(1+4*t**2))/2
+            t, t_prev = t_new, t
+            q = p + (t_prev-1)/t * (p - p_prev)
             
             # stopping criterion: check if primal-dual gap < epsilon
             if checkAccuracy:
                 div_p = self._imdiv(p)
-                h = 1/2 * np.sum(div_p**2)
-                primal = gamma * self(u-div_p) + h
-                norm_dual_iterate = np.sqrt(np.sum(p**2,axis=0))
-                dual_inadmissible = np.any(norm_dual_iterate > gamma*self.scale+1e-12)
-                dual = -np.Inf if dual_inadmissible else - h + np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
-                dgap = primal-dual
+                h = gamma/2 * np.sum(div_p**2)
+                primal = self(u-gamma*div_p) + h
+                conj_TV_p = np.max(np.sqrt(np.sum(p**2,axis=0)))
+                dual_inadmissible = conj_TV_p > self.scale+1e-12
+                dual = np.Inf if dual_inadmissible else h - np.sum(div_p * u) # dual value. dual iterate should never be inadmissible since we project in the end
+                dgap = primal+dual
                 stopcrit = dgap <= epsilon
                 if dgap < -5e-15: # for debugging purpose
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
         if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
-        return (u - self._imdiv(p)), i, dgap
+        return (u - gamma*self._imdiv(p)), i, dgap
         
     
 class l2_l1_norm():

@@ -43,9 +43,7 @@ class inexact_pgla():
             n_outputs = np.size(self.I_output_iterates)
             self.output_iterates = np.zeros(self.shape_x+(n_outputs,))
             if output_means is not None:
-                self.I_output_means = output_means[output_means > burnin]
-                if np.any(output_means <= burnin):
-                    print('Trying to return running means before end of burnin time. I\'ll remove these indices for you.')
+                self.I_output_means = output_means + burnin
             else:
                 self.I_output_means = np.reshape(self.n_iter,(1,))   # output last running mean if nothing specified
             n_means = np.size(self.I_output_means)
@@ -66,6 +64,7 @@ class inexact_pgla():
             self.prox_g = pd.g.prox
         else:
             self.inexact_prox_g = pd.g.inexact_prox
+            self.inexact_prox_g_old = pd.g.inexact_prox_old
             self.epsilon_prox = (lambda n : epsilon_prox) if np.isscalar(epsilon_prox) else epsilon_prox
             self.iter_prox = iter_prox
         
@@ -87,7 +86,7 @@ class inexact_pgla():
             if self.eff and self.iter in self.I_output_means:
                 self.output_means[...,j] = self.sum/(self.iter-self.burnin)
                 j+=1
-            if verbose and self.iter%20==0: 
+            if verbose:# and self.iter%20==0: 
                 progress = int(self.iter/self.n_iter*100)
                 sys.stdout.write('\b'*5 + '{:3d}% '.format(progress))
                 sys.stdout.flush()
@@ -118,8 +117,8 @@ class inexact_pgla():
             if self.exact:
                 self.x, num_prox_its = self.prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size), 0
             else:
-                # self.x, num_prox_its = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
-                self.x, num_prox_its, self.dgap_vals[self.iter-1] = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
+                self.x, num_prox_its = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
+                # self.x, num_prox_its, self.dgap_vals[self.iter-1] = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
             self.dfx = self.df(self.x)
             self.logpi_vals[self.iter-1] = self.f(self.x) + self.g(self.x)
             if self.iter > self.burnin:
