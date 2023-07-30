@@ -74,7 +74,7 @@ class pxmala():
         if verbose: sys.stdout.write('run PxMALA: {:3d}%. AR = NaN%'.format(0)); sys.stdout.flush()
         while self.iter < self.n_iter:
             self.update()
-            if verbose and self.iter%20==0: 
+            if verbose and self.iter%100==0: 
                 progress = int(self.iter/self.n_iter*100)
                 ar = int(self.accepted/self.iter*100)
                 sys.stdout.write('\b'*16 + '{:3d}%. AR = {:3d}% '.format(progress,ar));

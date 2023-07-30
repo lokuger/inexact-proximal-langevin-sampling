@@ -21,7 +21,7 @@ params = {
     'iterations_pxmala': 100000,
     'verbose': True,
     'step_type': 'fixed',        # 'decay','fixed'
-    'inexactness_type': 'fixed', # 'fixed','decay','none'
+    'inexactness_type': 'decay', # 'fixed','decay','none'
     'epsilon': 0.01,
     'rate': -0.2,
     'result_root': './results/wasserstein-dists-validation',
@@ -76,7 +76,7 @@ def main():
         n_chains = params['n_chains_ipgla']
         x0_ipgla = x_noisy
         W2sq_init = ot.lp.emd2_1d(s_pxmala,np.reshape(x0_ipgla,(-1,)))
-        K = np.unique(np.intc(np.round(10**np.arange(start=0,stop=4.1,step=0.2))))
+        K = np.unique(np.intc(np.round(10**np.arange(start=0,stop=3.1,step=0.2))))
         Kmax = np.max(K)
         
         # set step size: either fixed or the decaying sequence from remark in paper
