@@ -17,43 +17,36 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'n_chains_ipgla': 300,
+    'n_chains_ipgla': 1000,
     'iterations_pxmala': 100000,
-    'verbose': False,
-    'step_type': 'fixed', # 'decay'
-    'inexactness_type': 'fixed', # 'fixed'
-    'epsilon': 0.1,
-    'rate': -0.6,
+    'verbose': True,
+    'step_type': 'fixed',        # 'decay','fixed'
+    'inexactness_type': 'fixed', # 'fixed','decay','none'
+    'epsilon': 0.01,
+    'rate': -0.2,
     'result_root': './results/wasserstein-dists-validation',
     }
 
 
 #%% Main method
 def main():
-    step_fixed = (params['step_type'] == 'fixed')
-    errs_fixed = (params['inexactness_type'] == 'fixed')
-    
     result_root = params['result_root']
-    results_dir = result_root+'/steps_'+params['step_type']+'_inexactness_'+params['inexactness_type']
-    if not os.path.exists(results_dir):
-        os.makedirs(results_dir)
+    step_fixed = (params['step_type'] == 'fixed')
+    result_dir = result_root+'/steps-'+params['step_type']+'-inexactness-'+params['inexactness_type']
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
         
-    if errs_fixed: 
-        results_file = results_dir+'/W2dists-epsilon'+str(params['epsilon'])+'.npy'
-        results_file_ub = results_dir+'/W2dists-ub-epsilon'+str(params['epsilon'])+'.npy'
-        steps_file = results_dir+'/steps'+str(params['epsilon'])+'.npy'
-    else:
-        results_file = results_dir+'/W2dists-rate'+str(params['rate'])+'.npy'
-        results_file_ub = results_dir+'/W2dists-ub-rate'+str(params['rate'])+'.npy'
-        steps_file = results_dir+'/steps'+str(params['rate'])+'.npy'
+    d = {'fixed': '-epsilon'+str(params['epsilon']),
+         'decay': '-rate'+str(params['rate']),
+         'none': ''}
+    result_file = result_dir+'/W2dists'+d[params['inexactness_type']]+'.npy'
     
-    #if os.path.exists(results_file) and os.path.exists(results_file_ub):
-    #    print('Results file for these parameters already exist')
-    #else:
-    if True:
-        #%% generate data - artificial image with pixels drawn from Laplace distribution
-        # fix the seed here so that the posterior remains the same for different runs of the script
-        rng = default_rng(65654) if params['inexactness_type'] == 'fixed' else default_rng(43562) # makes sure two experiments don't use same seed, but lines in same experiments do
+    if os.path.exists(result_file):
+        print('Results file for these parameters already exist')
+    else:
+        #%% generate data - artificial parameter drawn from Laplace distribution
+        # fix the seed here so that the posterior remains the same for different runs of the script, otherwise the bounds would change
+        rng = default_rng(12345)
         verb = params['verbose']
         
         l1scale = 1
@@ -64,14 +57,11 @@ def main():
         posterior = pds.l2_l1prior(y=x_noisy, noise_std=noise_std, mu_l1=l1scale)
         
         #%% sample unbiasedly from posterior using PxMALA
-        # might be interesting to remove the following line. This generates the same Brownian motion for different 
-        # runs of the script and shows the effect of the error level even more obviously. 
-        # But could also be confusing when the error curves look very similar for different error levels/runs
-        
+        rng = default_rng()
         x0_pxmala = x_noisy*np.ones((1,1))
-        tau_pxmala = 1.2 # tune this by hand to achieve a satisfactory acceptance rate (roughly 50%-65%)
-        n_samples_pxmala = params['iterations_pxmala'] # int(10*T/tau_pxmala)
-        burnin_pxmala = 1000 #int(10*T_burnin/tau_pxmala)
+        tau_pxmala = 0.9 # tune this by hand to achieve a satisfactory acceptance rate (roughly 50%-65%)
+        n_samples_pxmala = params['iterations_pxmala']
+        burnin_pxmala = 1000
         posterior = pds.l2_l1prior(y=x_noisy, noise_std=noise_std, mu_l1=l1scale)
         sampler_unbiased = pxmala(x0_pxmala, tau_pxmala, n_samples_pxmala+burnin_pxmala, burnin_pxmala, pd=posterior, rng=rng, efficient=False)
     
@@ -82,80 +72,76 @@ def main():
         # format samples for Wasserstein distance computation
         s_pxmala = np.reshape(sampler_unbiased.x,(n_samples_pxmala,))
         
-        #%% Sample biasedly from posterior using (exact) PGLA
-        # run many different chains and extract the law at Kth iterate to validate the theoretical convergence results
+        #%% Sample biasedly from posterior using PGLA
         n_chains = params['n_chains_ipgla']
         x0_ipgla = x_noisy
         W2sq_init = ot.lp.emd2_1d(s_pxmala,np.reshape(x0_ipgla,(-1,)))
-        K = np.unique(np.intc(np.round(10**np.arange(start=0,stop=3.1,step=0.2))))
+        K = np.unique(np.intc(np.round(10**np.arange(start=0,stop=4.1,step=0.2))))
         Kmax = np.max(K)
         
-        # set fixed step size or compute the decaying sequence
-        if step_fixed:
-            tau_ipgla = 0.01/L
-        else:
+        # set step size: either fixed or the decaying sequence from remark in paper
+        if not step_fixed:
             tau_array = np.zeros((Kmax,))
             tau_array[0] = 1/L
             for i in np.arange(1,Kmax):
-                tau_array[i] = np.minimum(tau_ipgla[i-1],np.maximum(1/(L*i),tau_ipgla[i-1]/(1+L)))
-            tau_ipgla = lambda n: tau_array[n]
+                tau_array[i] = np.minimum(tau_array[i-1],np.maximum(1/(L*i),tau_array[i-1]/(1+L)))
+        tau_ipgla = 0.01/L if step_fixed else (lambda n: tau_array[n])
+            
         
-        if errs_fixed:
+        # set inexactness level
+        if params['inexactness_type'] == 'none':
+            epsilon = 0
+        elif params['inexactness_type'] == 'fixed':
             epsilon = params['epsilon']
-            samples_K = np.zeros((len(K),n_chains))
-            if verb: sys.stdout.write('Run inexact PLA chains: {:3d}% '.format(0)); sys.stdout.flush()
-            for ic in np.arange(n_chains):
-                progress = int(ic/n_chains*100)
-                if verb: sys.stdout.write('\b'*5 + '{:3d}% '.format(progress)); sys.stdout.flush()
-                if epsilon == 0:
-                    sampler = inexact_pgla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, exact=True, efficient=True, output_iterates=K)
-                else:
-                    sampler = inexact_pgla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon, efficient=True, output_iterates=K)
-                sampler.simulate(verbose=False)
-                samples_K[:,ic] = sampler.output_iterates
-            W2sq = np.zeros((len(K),))
-            W2sq_ub_theory = np.zeros((len(K),))
-            if verb: sys.stdout.write('\b'*5 + 'Done.\n'); sys.stdout.flush()
-        else:
+        elif params['inexactness_type'] == 'decay':
             epsilon_rate = params['rate']
-            samples_K = np.zeros((len(K),n_chains))
-            if verb: sys.stdout.write('Run inexact PLA chains: {:3d}% '.format(0)); sys.stdout.flush()
-            for ic in np.arange(n_chains):
-                progress = int(ic/n_chains*100)
-                if verb: sys.stdout.write('\b'*5 + '{:3d}% '.format(progress)); sys.stdout.flush()
-                epsilon_prox = lambda n: n**epsilon_rate
-                sampler = inexact_pgla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon_prox, efficient=True, output_iterates=K)
-                sampler.simulate(verbose=False)
-                samples_K[:,ic] = sampler.output_iterates
-                    
-            # compute cumulative sums of epsilons for theoretical upper bounds
-            sums_epsilons = np.zeros((len(K),))
-            i,s = 0,0
-            for k in np.arange(1,Kmax+1):
-                s += k**epsilon_rate
-                if k in K:
-                    sums_epsilons[i] = s
-                    i+=1
-            W2sq = np.zeros((len(K),))
-            W2sq_ub_theory = np.zeros((len(K),))
-            if verb: sys.stdout.write('\b'*5 + 'Done.\n'); sys.stdout.flush()
+            epsilon = lambda n: n**epsilon_rate
+            
+        # actual simulation - draw samples using ipgla
+        samples_K = np.zeros((len(K),n_chains))
+        if verb: sys.stdout.write('Run inexact PLA chains: {:3d}% '.format(0)); sys.stdout.flush()
+        n_prox_its = 0
+        for ic in np.arange(n_chains):
+            if verb: progress = int(ic/n_chains*100); sys.stdout.write('\b'*5 + '{:3d}% '.format(progress)); sys.stdout.flush()
+            sampler = inexact_pgla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon, efficient=True, output_iterates=K)
+            sampler.simulate(verbose=False)
+            n_prox_its += sampler.num_prox_its_total
+            samples_K[:,ic] = sampler.output_iterates
+        print('Avg number iterations towards prox: {}'.format(n_prox_its/(Kmax*n_chains)))
+        W2sq = np.zeros((len(K),))
+        if verb: sys.stdout.write('\b'*5 + 'Done.\n'); sys.stdout.flush()
         
+        # compute squared W2 distances
         if verb: sys.stdout.write('Compute Wasserstein distances...'); sys.stdout.flush()
-        if errs_fixed:
-            for ik,k in enumerate(K):
-                s_ipgla = np.reshape(samples_K[ik,:],(-1,))
-                W2sq[ik] = ot.emd2_1d(s_pxmala,s_ipgla)
-                W2sq_ub_theory[ik] = (1 - L * tau_ipgla)**k * W2sq_init + tau_ipgla/L * (2*L*1 + 1) + 2*epsilon/L
-        else:
-            for ik,k in enumerate(K):
-                s_ipgla = np.reshape(samples_K[ik,:],(-1,))
-                W2sq[ik] = ot.emd2_1d(s_pxmala,s_ipgla)
-                W2sq_ub_theory[ik] = (1 - L * tau_ipgla)**k * W2sq_init + tau_ipgla/L * (2*L*1 + 1) + 2/(L*k)*sums_epsilons[ik]
-        if verb: sys.stdout.write('\b'*2 + ' Done.\nSaving...'); sys.stdout.flush()
-        np.save(results_file, W2sq)
-        np.save(results_file_ub, W2sq_ub_theory)
-        np.save(steps_file, K)
+        for ik,k in enumerate(K):
+            s_ipgla = np.reshape(samples_K[ik,:],(-1,))
+            W2sq[ik] = ot.emd2_1d(s_pxmala,s_ipgla)
+
+        # compute upper bounds predicted by the theory (if applicable - we did not compute bounds for variable step sizes)
+        if params['step_type'] == 'fixed':
+            W2sq_ub_theory = np.zeros((len(K),))
+            if params['inexactness_type'] in ['none','fixed']:  # part 1 of nonasymptotic theorem on fixed step sizes
+                for ik,k in enumerate(K):
+                    W2sq_ub_theory[ik] = (1 - L * tau_ipgla)**k * W2sq_init + tau_ipgla/L * (2*L*1 + 1) + 2*epsilon/L
+            elif params['inexactness_type'] == 'decay':         # part 2 of nonasymptotic theorem on fixed step sizes
+                sums_epsilons = np.zeros((len(K),))
+                i,s = 0,0
+                for k in np.arange(1,Kmax+1):
+                    s += k**epsilon_rate
+                    if k in K:
+                        sums_epsilons[i] = s
+                        i+=1
+                for ik,k in enumerate(K):
+                    W2sq_ub_theory[ik] = (1 - L * tau_ipgla)**k * W2sq_init + tau_ipgla/L * (2*L*1 + 1) + 2/(L*k)*sums_epsilons[ik]
+            
         if verb: sys.stdout.write('\b'*2 + ' Done.\n'); sys.stdout.flush()
+        
+        with open(result_file,'wb') as f:
+            np.save(f, W2sq)
+            np.save(f, K)
+            if params['step_type'] in ['none','fixed']:
+                np.save(f, W2sq_ub_theory)
+        
 
     
 #%% help function for calling from command line
@@ -204,6 +190,7 @@ if __name__ == '__main__':
             params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
             params['verbose'] = True
+    
     main()
     
     

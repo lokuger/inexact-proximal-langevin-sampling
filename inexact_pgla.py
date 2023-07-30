@@ -14,7 +14,7 @@ class inexact_pgla():
         Optional parameters
         - step-size             : iPGLA step-size (tau), either a scalar or a handle for iteration number input
         - rng (default_rng())   : random number generator for reproducibility, init new one if None
-        - epsilon_prox (1e-2)   : prox accuracy, either a scalar or a handle of n as epsilon(n)
+        - epsilon_prox (1e-2)   : prox accuracy, either a scalar or a handle of n as epsilon(n). If epsilon == 0, equivalent to setting exact=True
         - iter_prox (np.Inf)    : number of iterations for prox, can be given as alternative to epsilon
         - efficient (True)      : if True, do not save iterates but only current iterate, running mean and std of samples
         - exact (False)         : if pd.g has an exact proximal operator, can choose True and run exact PGLA
@@ -49,7 +49,7 @@ class inexact_pgla():
             n_means = np.size(self.I_output_means)
             self.output_means = np.zeros(self.shape_x+(n_means,))
             if stop_crit is not None:
-                self.stop_crit = stop_crit          # TODO implement this below!
+                self.stop_crit = stop_crit          # TODO potentially implement this below if necessary
         else:
             self.x = np.zeros(self.shape_x+(self.n_iter+1,))
             self.x[...,0] = x0
@@ -63,10 +63,13 @@ class inexact_pgla():
         if self.exact:
             self.prox_g = pd.g.prox
         else:
-            self.inexact_prox_g = pd.g.inexact_prox
-            self.inexact_prox_g_old = pd.g.inexact_prox_old
-            self.epsilon_prox = (lambda n : epsilon_prox) if np.isscalar(epsilon_prox) else epsilon_prox
-            self.iter_prox = iter_prox
+            if epsilon_prox == 0:
+                self.exact = True
+                self.prox_g = pd.g.prox
+            else:
+                self.inexact_prox_g = pd.g.inexact_prox
+                self.epsilon_prox = (lambda n : epsilon_prox) if np.isscalar(epsilon_prox) else epsilon_prox
+                self.iter_prox = iter_prox
         
         # diagnostic checks
         self.logpi_vals = np.zeros((self.n_iter,))
@@ -107,7 +110,7 @@ class inexact_pgla():
     def update(self):
         self.iter = self.iter + 1
         xi = self.rng.normal(size=self.shape_x)
-        step_size = self.step_size(self.iter)
+        step_size = self.step_size(self.iter-1)
         
         if not self.exact:
             epsilon_prox = self.epsilon_prox(self.iter) if self.epsilon_prox is not None else None
