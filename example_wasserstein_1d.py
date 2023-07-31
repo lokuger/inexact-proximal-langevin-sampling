@@ -17,13 +17,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'n_chains_ipgla': 1000,
+    'n_chains_ipgla': 500,
     'iterations_pxmala': 100000,
     'verbose': True,
-    'step_type': 'fixed',        # 'decay','fixed'
-    'inexactness_type': 'fixed', # 'fixed','decay','none'
+    'step_type': 'decay',        # 'decay','fixed'
+    'inexactness_type': 'none', # 'fixed','decay','none'
     'epsilon': 0.01,
-    'rate': -0.2,
+    'rate': -1.0,
     'result_root': './results/wasserstein-dists-validation',
     }
 
@@ -82,7 +82,7 @@ def main():
         # set step size: either fixed or the decaying sequence from remark in paper
         if not step_fixed:
             tau_array = np.zeros((Kmax,))
-            tau_array[0] = 1/L
+            tau_array[0] = 0.01/L
             for i in np.arange(1,Kmax):
                 tau_array[i] = np.minimum(tau_array[i-1],np.maximum(1/(L*i),tau_array[i-1]/(1+L)))
         tau_ipgla = 0.01/L if step_fixed else (lambda n: tau_array[n])

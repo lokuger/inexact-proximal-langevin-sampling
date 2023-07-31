@@ -74,6 +74,7 @@ class inexact_pgla():
         # diagnostic checks
         self.logpi_vals = np.zeros((self.n_iter,))
         self.dgap_vals = np.zeros((self.n_iter,))
+        self.num_prox_its = np.zeros((self.n_iter,))
         self.num_prox_its_total = 0
     
     def simulate(self, verbose=False):
@@ -135,6 +136,7 @@ class inexact_pgla():
             self.dfx = self.df(self.x[...,self.iter])
             self.logpi_vals[self.iter-1] = self.f(self.x[...,self.iter]) + self.g(self.x[...,self.iter])
         
+        self.num_prox_its[self.iter-1] = num_prox_its
         if self.iter > self.burnin:
             self.num_prox_its_total += num_prox_its
         
