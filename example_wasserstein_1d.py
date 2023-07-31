@@ -21,7 +21,7 @@ params = {
     'iterations_pxmala': 100000,
     'verbose': True,
     'step_type': 'fixed',        # 'decay','fixed'
-    'inexactness_type': 'decay', # 'fixed','decay','none'
+    'inexactness_type': 'fixed', # 'fixed','decay','none'
     'epsilon': 0.01,
     'rate': -0.2,
     'result_root': './results/wasserstein-dists-validation',
@@ -154,8 +154,8 @@ def print_help():
     print('    -h (--help): Print this help.')
     print('    -n (--n_chains_ipgla): Number of chains to run with IPGLA')
     print('    -m (--n_samples_pxmala): Number of (unbiased) samples to generate by Px-MALA (1000 burnin + this value)')
-    print('    -s (--step_decays): Instead of fixed step sizes use decaying step sizes, choice as in remark in paper')
-    print('    -i (--inexactness_decays): Instead of fixed epsilon choose decaying inexactness level')
+    print('    -s (--step=): Type of step sizes, \'fixed\' or \'decay\'')
+    print('    -i (--inexactness=): Type of errors - \'fixed\', \'decay\' or \'none\'')
     print('    -r (--rate=): If decaying inexactness level, set the decay rate here')
     print('    -e (--epsilon=): If fixed inexactness level, set the fixed level here')
     print('    -d (--result_dir=): root directory for results. Default: ./results/wasserstein-dists-validation')
@@ -164,8 +164,8 @@ def print_help():
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hn:m:sir:e:d:v",
-                                   ["help","n_chains_ipgla=","n_samples_pxmala=","step_decays","inexactness_decays","rate=","epsilon=","result_dir=","verbose"])
+        opts, args = getopt.getopt(sys.argv[1:],"hn:m:s:i:r:e:d:v",
+                                   ["help","n_chains_ipgla=","n_samples_pxmala=","step=","inexactness=","rate=","epsilon=","result_dir=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -178,10 +178,14 @@ if __name__ == '__main__':
             params['n_chains_ipgla'] = int(arg)
         elif opt in ("-m","--n_samples_pxmala"):
             params['iterations_pxmala'] = int(arg)
-        elif opt in ("-s", "--step_decays"):
-            params['step_type'] = 'decay'
-        elif opt in ("-i", "--inexactness_decays"):
-            params['inexactness_type'] = 'decay'
+        elif opt in ("-s", "--step"):
+            if arg in ['fixed','decay']:
+                params['step'] = arg
+            else: print('Unknown step size option'); sys.exit(3)
+        elif opt in ("-i", "--inexactness"):
+            if arg in ['fixed','decay','none']:
+                params['inexactness'] = arg
+            else: print('Unknown inexactness choice option'); sys.exit(3)
         elif opt in ("-r", "--rate"):
             params['rate'] = np.float16(arg)
         elif opt in ("-e","--epsilon"):
