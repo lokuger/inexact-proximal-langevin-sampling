@@ -21,7 +21,7 @@ params = {
     'iterations_pxmala': 100000,
     'verbose': True,
     'step_type': 'decay',        # 'decay','fixed'
-    'inexactness_type': 'none', # 'fixed','decay','none'
+    'inexactness_type': 'decay', # 'fixed','decay','none'
     'epsilon': 0.01,
     'rate': -1.0,
     'result_root': './results/wasserstein-dists-validation',
@@ -180,11 +180,11 @@ if __name__ == '__main__':
             params['iterations_pxmala'] = int(arg)
         elif opt in ("-s", "--step"):
             if arg in ['fixed','decay']:
-                params['step'] = arg
+                params['step_type'] = arg
             else: print('Unknown step size option'); sys.exit(3)
         elif opt in ("-i", "--inexactness"):
             if arg in ['fixed','decay','none']:
-                params['inexactness'] = arg
+                params['inexactness_type'] = arg
             else: print('Unknown inexactness choice option'); sys.exit(3)
         elif opt in ("-r", "--rate"):
             params['rate'] = np.float16(arg)
