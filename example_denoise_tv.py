@@ -20,10 +20,10 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 90000,
+    'iterations': 10000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': 1.0,
+    'log_epsilon': -2.0,
     'step': 'large',
     'efficient': True,
     'verbose': True,
@@ -68,7 +68,7 @@ def main():
     logstd_detail_file = result_root+'/logstd_detail_'+file_specifier+'.png'  
     
     #%% Ground truth
-    if not os.path.exists(results_file):    
+    if not os.path.exists(results_file):
         rng = default_rng(6346534)
         verb = params['verbose']
         try:
@@ -98,66 +98,62 @@ def main():
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        # u,its_map,dgap = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e-8, max_iter=100, verbose=verb)
-        u_FISTA,its_FISTA,dgap_FISTA = tv.inexact_prox_FISTA_variant(y, gamma=noise_std**2, epsilon=1e-8, max_iter=100, verbose=verb)
+        u,its,dgap = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e2, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        # my_imshow(u,'MAP (dual aGD, mu_TV = {:.1f})'.format(mu_tv))
-        # my_imshow(u[314:378,444:508],'MAP details')
-        my_imshow(u_FISTA,'MAP (FISTA on dual, mu_TV = {:.1f})'.format(mu_tv))
-        my_imshow(u_FISTA[314:378,444:508],'FISTA MAP details')
-        # print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its_map))
-        print(dgap_FISTA)
+        my_imshow(u,'MAP (FISTA on dual, mu_TV = {:.1f})'.format(mu_tv))
+        my_imshow(u[314:378,444:508],'FISTA MAP details')
+        print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its))
         
         #%% sample using inexact PLA
-        # x0 = np.copy(y)
-        # if params['step'] == 'large':
-        #     tau = 1/L
-        # elif params['step'] == 'small':
-        #     tau = 0.5/L
-        # elif params['step'] == 'tiny':
-        #     tau = 0.01/L
-        # C = tau*mu_tv*tv(u)
-        # epsilon = C*(10**params['log_epsilon'])
-        # burnin = 50 # burnin for denoising is usually short
-        # n_samples = params['iterations']+burnin
-        # posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
-        # eff = params['efficient']
+        x0 = np.copy(y)
+        if params['step'] == 'large':
+            tau = 1/L
+        elif params['step'] == 'small':
+            tau = 0.5/L
+        elif params['step'] == 'tiny':
+            tau = 0.01/L
+        C = tau*mu_tv*tv(u)
+        epsilon = C*(10**params['log_epsilon'])
+        burnin = np.intc(1/(tau*L)) # burnin for denoising is usually short, one gradient step with step size 1/L lands at y
+        n_samples = params['iterations']+burnin
+        posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
+        eff = params['efficient']
         
         # output_means = np.reshape(np.reshape(np.array([1,2,5]),(1,-1))*np.reshape(10**np.arange(6),(-1,1)),(-1,))     # 1,2,5,10,20,50,... until max number of samples is reached
         # output_means = output_means[output_means<=n_samples]
-        # ######################## TODO see comment next line
-        # ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, output_means=output_means) ###################### # implement a custom evaluatable stopping criterion
-        # if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
-        # ipla.simulate(verbose=verb)
+        ######################## TODO see comment next line
+        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff) ###################### # implement a custom evaluatable stopping criterion
+        if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
+        ipla.simulate(verbose=verb)
         
         # running_means = ipla.output_means
         # n_means,I_running_means = running_means.shape[-1],ipla.I_output_means
         
-        # #%% plots
-        # # diagnostic plot, making sure the sampler looks plausible
-        # # plt.figure()
-        # # plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
-        # # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
-        # # plt.show()
-        # # plt.figure()
-        # # plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
-        # # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        # # plt.show()
+        #%% plots
+        # diagnostic plot, making sure the sampler looks plausible
+        # plt.figure()
+        # plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
+        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
+        # plt.show()
+        # plt.figure()
+        # plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
+        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        # plt.show()
         
-        # my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
-        # my_imshow(ipla.mean[314:378,444:508],'sample mean details')
-        # logstd = np.log10(ipla.std)
-        # my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
-        # my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
-        # print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
-        # print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
+        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
+        my_imshow(ipla.mean[314:378,444:508],'sample mean details')
+        logstd = np.log10(ipla.std)
+        my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
+        my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
+        print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
+        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
         
-        # #%% saving
-        # with open(results_file,'wb') as f:
-        #     np.save(f,(x,y,u,ipla.mean,ipla.std))   # ground truth, noisy, map, sample mean and sample std
-        #     np.save(f,running_means)            # running means
-        #     np.save(f,I_running_means)          # indices to which these means belong
+        #%% saving
+        with open(results_file,'wb') as f:
+            np.save(f,(x,y,u,ipla.mean,ipla.std))   # ground truth, noisy, map, sample mean and sample std
+            # np.save(f,running_means)              # running means
+            # np.save(f,I_running_means)            # indices to which these means belong
     else:
         with open(results_file,'rb') as f:
             x,y,u,mn,std = np.load(f)               # ground truth, noisy, map, sample mean and sample std
