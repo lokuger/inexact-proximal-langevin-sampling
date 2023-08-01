@@ -98,7 +98,7 @@ def main():
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        u,its,dgap = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e2, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
+        u,its = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e2, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (FISTA on dual, mu_TV = {:.1f})'.format(mu_tv))
