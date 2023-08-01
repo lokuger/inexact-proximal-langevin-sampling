@@ -287,7 +287,7 @@ class total_variation():
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
         if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
-        return (u - gamma*self._imdiv(p)), i, dgap
+        return (u - gamma*self._imdiv(p)), i
         
     
 class l2_l1_norm():
