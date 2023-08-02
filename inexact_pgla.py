@@ -48,8 +48,8 @@ class inexact_pgla():
                 self.I_output_means = np.reshape(self.n_iter,(1,))   # output last running mean if nothing specified
             n_means = np.size(self.I_output_means)
             self.output_means = np.zeros(self.shape_x+(n_means,))
-            if stop_crit is not None:
-                self.stop_crit = stop_crit          # TODO potentially implement this below if necessary
+            
+            self.stop_crit = stop_crit          # should be an executable with inexact_pgla object as only argument
         else:
             self.x = np.zeros(self.shape_x+(self.n_iter+1,))
             self.x[...,0] = x0
@@ -79,8 +79,9 @@ class inexact_pgla():
     
     def simulate(self, verbose=False):
         if verbose: sys.stdout.write('run inexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
-        i,j = 0,0
-        while self.iter < self.n_iter:
+        i,j,stop = 0,0,False
+        while not stop:
+            # update step
             self.update()
             # potentially save iterate
             if self.eff and self.iter in self.I_output_iterates:
@@ -94,10 +95,27 @@ class inexact_pgla():
                 progress = int(self.iter/self.n_iter*100)
                 sys.stdout.write('\b'*5 + '{:3d}% '.format(progress))
                 sys.stdout.flush()
-        if verbose > 0: sys.stdout.write('\b'*5 + '100%\n'); sys.stdout.flush()
+            stop = (self.iter < self.n_iter) if (self.stop_crit is None) else ((self.iter < self.n_iter) and (self.stop_crit(self)))
         
+        # adjust a few variables if stopping criterion was met before maximum number of iterations
+        if self.iter < self.n_iter :
+            self.n_iter = self.iter
+            self.logpi_vals = self.logpi_vals[:self.iter]
+            self.num_prox_its = self.num_prox_its[:self.iter]
+            if self.eff:
+                # remove output samples and means at iterations after the stopping criterion
+                self.I_output_iterates = self.I_output_iterates[self.I_output_iterates < self.n_iter+1]
+                self.output_iterates = self.output_iterates[...,:i]
+                self.I_output_means = self.I_output_means[self.I_output_means < self.n_iter+1]
+                self.output_means = self.output_means[...,:j]
+            else:
+                self.x = self.x[...,0:self.n_iter+1]
+            if verbose > 0: sys.stdout.write('\b'*5 + 'Stopping criterion satisfied at iteration {}. 100%\n'.format(self.iter)); sys.stdout.flush()
+        else:
+            if verbose > 0: sys.stdout.write('\b'*5 + '100%\n'); sys.stdout.flush()
+        
+        # compute running mean and standard deviation of Markov chain after iteration
         if self.eff:
-            # once loop is done, compute mean and variance point estimates
             N = self.n_iter-self.burnin
             self.mean = self.sum/N
             self.var = (self.sum_sq - (self.sum**2)/N)/(N-1) if N>1 else np.NAN

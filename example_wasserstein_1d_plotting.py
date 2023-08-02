@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 12})
 
 params = {
-    'step_type': 'fixed', # 'decay' or 'fixed'
+    'step_type': 'decay', # 'decay' or 'fixed'
     'inexactness_type': 'decay', # 'decay', 'fixed', 'none'
-    'add_none': False,
+    'add_none': True,
     }
 
 def main():
@@ -42,7 +42,7 @@ def main():
                 ax.plot(K,W2sq,colors[ie]+'-'+markers[ie],label=r'$\mathcal{W}_2^2(\tilde\mu^k,\tilde\mu^\ast), \epsilon = $'+'{:s}'.format(s))
                 ax.plot(K,W2sq_ub,colors[ie]+'--'+markers[ie])
         elif params['inexactness_type'] == 'decay':
-            rates = np.array([-0.2, -0.5, -1.0, -2.0])
+            rates = np.array([-0.2, -0.4, -0.6, -0.8, -1.0])
             xmax = 0
             for ir,rate in enumerate(rates):
                 res_file = res_dir+'W2dists-rate'+str(rate)+'.npy'

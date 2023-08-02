@@ -23,8 +23,7 @@ params = {
     'iterations': 10000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': -2.0,
-    'step': 'large',
+    'log_epsilon': -0.2,
     'efficient': True,
     'verbose': True,
     'result_root': './results/denoise-tv',
@@ -55,8 +54,6 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
 #%% Main method - generate results directories
 def main():
     result_root = params['result_root']
-    if params['step'] == 'tiny': 
-        result_root = result_root + '/smaller_steps'
     
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
     accuracy = 'log-epsilon{}'.format(params['log_epsilon'])
@@ -68,7 +65,7 @@ def main():
     logstd_detail_file = result_root+'/logstd_detail_'+file_specifier+'.png'  
     
     #%% Ground truth
-    if not os.path.exists(results_file):
+    if not False: #os.path.exists(results_file):
         rng = default_rng(6346534)
         verb = params['verbose']
         try:
@@ -92,6 +89,8 @@ def main():
         y = x + noise_std*rng.normal(size=x.shape)
         L = 1/noise_std**2
         
+        posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
+        
         # show ground truth and corrupted image
         my_imshow(x, 'ground truth')
         my_imshow(y, 'noisy image')
@@ -107,25 +106,22 @@ def main():
         
         #%% sample using inexact PLA
         x0 = np.copy(y)
-        if params['step'] == 'large':
-            tau = 1/L
-        elif params['step'] == 'small':
-            tau = 0.5/L
-        elif params['step'] == 'tiny':
-            tau = 0.01/L
+        tau = 1/L
         C = tau*mu_tv*tv(u)
         epsilon = C*(10**params['log_epsilon'])
         burnin = np.intc(1/(tau*L)) # burnin for denoising is usually short, one gradient step with step size 1/L lands at y
         n_samples = params['iterations']+burnin
-        posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
         eff = params['efficient']
         
         # output_means = np.reshape(np.reshape(np.array([1,2,5]),(1,-1))*np.reshape(10**np.arange(6),(-1,1)),(-1,))     # 1,2,5,10,20,50,... until max number of samples is reached
         # output_means = output_means[output_means<=n_samples]
-        ######################## TODO see comment next line
-        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff) ###################### # implement a custom evaluatable stopping criterion
+        with open(result_root+'/'+'{}_log-epsilon-2.0_10000-samples.npy'.format(test_image_name),'rb') as f:
+            _,_,_,mmse_ref,_ = np.load(f)               # ground truth, noisy, map, sample mean and sample std
+        mmse_reference = mmse_ref
+        stopcrit = lambda sampler : (sampler.iter>sampler.burnin and np.sqrt(np.sum((mmse_reference - sampler.sum/(sampler.iter-sampler.burnin))**2)/np.sum((mmse_reference)**2)) < 0.01)
+        ipgla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, stop_crit=stopcrit)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
-        ipla.simulate(verbose=verb)
+        ipgla.simulate(verbose=verb)
         
         # running_means = ipla.output_means
         # n_means,I_running_means = running_means.shape[-1],ipla.I_output_means
@@ -141,31 +137,31 @@ def main():
         # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         # plt.show()
         
-        my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
-        my_imshow(ipla.mean[314:378,444:508],'sample mean details')
-        logstd = np.log10(ipla.std)
+        my_imshow(ipgla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
+        my_imshow(ipgla.mean[314:378,444:508],'sample mean details')
+        logstd = np.log10(ipgla.std)
         my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
         my_imshow(logstd[314:378,444:508],'sample std details', np.min(logstd), np.max(logstd))
-        print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
-        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
+        print('Total no. iterations to compute proximal mappings: {}'.format(ipgla.num_prox_its_total))
+        print('No. iterations per sampling step: {:.1f}'.format(ipgla.num_prox_its_total/(ipgla.n_iter-ipgla.burnin)))
         
         #%% saving
-        with open(results_file,'wb') as f:
-            np.save(f,(x,y,u,ipla.mean,ipla.std))   # ground truth, noisy, map, sample mean and sample std
+        # with open(results_file,'wb') as f:
+            # np.save(f,(x,y,u,ipgla.mean,ipgla.std))   # ground truth, noisy, map, sample mean and sample std
             # np.save(f,running_means)              # running means
             # np.save(f,I_running_means)            # indices to which these means belong
     else:
         with open(results_file,'rb') as f:
             x,y,u,mn,std = np.load(f)               # ground truth, noisy, map, sample mean and sample std
-            running_means = np.load(f)              # running means
-            I_running_means = np.load(f)            # indices to which these means belong
+            # running_means = np.load(f)              # running means
+            # I_running_means = np.load(f)            # indices to which these means belong
         logstd = np.log10(std)
         
-        with open(result_root+'/'+'{}_log-epsilon-2.0_10000-samples.npy'.format(test_image_name),'rb') as f:
-            _,_,_,mmse,_ = np.load(f)               # ground truth, noisy, map, sample mean and sample std
+        # with open(result_root+'/'+'{}_log-epsilon-2.0_10000-samples.npy'.format(test_image_name),'rb') as f:
+        #     _,_,_,mmse,_ = np.load(f)               # ground truth, noisy, map, sample mean and sample std
         
-        n_means = running_means.shape[-1]
-        mmse_err = np.zeros((n_means,))
+        # n_means = running_means.shape[-1]
+        # mmse_err = np.zeros((n_means,))
         # for i in [6]:# np.arange(n_means):
             # my_imshow(running_means[...,i], 'Running mean at iteration {}'.format(I_running_means[i])) 
             # my_imshow(running_means[314:378,444:508,i], 'Running mean at iteration {}'.format(I_running_means[i])) 
@@ -176,13 +172,13 @@ def main():
         # ax.set_xscale("log")
         # ax.plot(I_running_means-50,mmse_err)
         
-        logstd_min = np.min(logstd)
-        logstd_max = np.max(logstd)
+        # logstd_min = np.min(logstd)
+        # logstd_max = np.max(logstd)
         
-        # my_imshow(x, 'ground truth')
-        # my_imshow(y, 'noisy')
-        # my_imshow(u, 'map')
-        # my_imshow(mn, 'mean')
+        my_imshow(x, 'ground truth')
+        my_imshow(y, 'noisy')
+        my_imshow(u, 'map')
+        my_imshow(mn, 'mean')
         my_imshow(logstd, 'logstd', -1.8, -0.6)
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
@@ -210,15 +206,14 @@ def print_help():
     print('    -f (--testfile_path=): Path to test image file')
     print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
     print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
-    print('    -s (--step=): \'large\' for 1/L or \'small\' for 0.5/L')
     print('    -d (--result_dir=): root directory for results. Default: ./results/deblur-wavelets')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:s:d:v",
-                                   ["help","iterations=","testfile_path=","efficient_off","log_epsilon=","step=","result_dir=","verbose"])
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:d:v",
+                                   ["help","iterations=","testfile_path=","efficient_off","log_epsilon=","result_dir=","verbose"])
     except getopt.GetoptError as e:
         print(e.msg)
         print_help()
@@ -236,8 +231,6 @@ if __name__ == '__main__':
             params['efficient'] = False
         elif opt in ("-l", "--log_epsilon"):
             params['log_epsilon'] = float(arg)
-        elif opt in ["-s", "--step="]:
-            params['step'] = arg
         elif opt in ("-d","--result_dir"):
             params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
