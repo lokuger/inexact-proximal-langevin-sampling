@@ -95,7 +95,7 @@ class inexact_pgla():
                 progress = int(self.iter/self.n_iter*100)
                 sys.stdout.write('\b'*5 + '{:3d}% '.format(progress))
                 sys.stdout.flush()
-            stop = (self.iter < self.n_iter) if (self.stop_crit is None) else ((self.iter < self.n_iter) and (self.stop_crit(self)))
+            stop = (self.iter == self.n_iter) if (self.stop_crit is None) else ((self.iter == self.n_iter) and (self.stop_crit(self)))
         
         # adjust a few variables if stopping criterion was met before maximum number of iterations
         if self.iter < self.n_iter :
