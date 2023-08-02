@@ -19,11 +19,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations_max': 10,
+    'iterations_max': 10000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
     'log_epsilon': np.arange(0,-2.1,-0.2),
-    'mmse_accuracy': 0.001,
+    'mmse_accuracy': 0.01,
     'step': 'large',
     'efficient': True,
     'verbose': True,
@@ -94,7 +94,7 @@ def main():
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        u,its = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e2, max_iter=50, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
+        u,its = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e2, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (FISTA on dual, mu_TV = {:.1f})'.format(mu_tv))
