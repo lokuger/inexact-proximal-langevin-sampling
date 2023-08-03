@@ -20,10 +20,10 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
+    'iterations': 100,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': -0.2,
+    'log_eta': -2.0,
     'efficient': True,
     'verbose': True,
     'result_root': './results/denoise-tv',
@@ -56,16 +56,17 @@ def main():
     result_root = params['result_root']
     
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
-    accuracy = 'log-epsilon{}'.format(params['log_epsilon'])
+    accuracy = 'log-eta{}'.format(params['log_eta'])
     file_specifier = '{}_{}_{}-samples'.format(test_image_name,accuracy,params['iterations'])
     results_file = result_root+'/'+file_specifier+'.npy'
+    # results_file= result_root+'/wheel_mmse_reference.npy'
     mmse_file = result_root+'/mmse_'+file_specifier+'.png'  
     mmse_detail_file = result_root+'/mmse_detail_'+file_specifier+'.png'  
     logstd_file = result_root+'/logstd_'+file_specifier+'.png'  
-    logstd_detail_file = result_root+'/logstd_detail_'+file_specifier+'.png'  
+    logstd_detail_file = result_root+'/logstd_detail_'+file_specifier+'.png'
     
     #%% Ground truth
-    if not False: #os.path.exists(results_file):
+    if not os.path.exists(results_file):
         rng = default_rng(6346534)
         verb = params['verbose']
         try:
@@ -92,42 +93,39 @@ def main():
         posterior = pds.l2_denoise_tv(n, n, y, noise_std=noise_std, mu_tv=mu_tv)
         
         # show ground truth and corrupted image
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'noisy image')
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'noisy image')
             
         #%% MAP computation - L2-TV denoising (ROF)
+        C = mu_tv*tv(y)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        u,its = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e2, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
+        u,its = tv.inexact_prox(y, gamma=noise_std**2, epsilon=C*1e-4, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
-        my_imshow(u,'MAP (FISTA on dual, mu_TV = {:.1f})'.format(mu_tv))
-        my_imshow(u[314:378,444:508],'FISTA MAP details')
+        # my_imshow(u,'MAP (FISTA on dual, mu_TV = {:.1f})'.format(mu_tv))
+        # my_imshow(u[314:378,444:508],'FISTA MAP details')
         print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its))
         
         #%% sample using inexact PLA
         x0 = np.copy(y)
         tau = 1/L
-        C = tau*mu_tv*tv(u)
-        epsilon = C*(10**params['log_epsilon'])
+        epsilon = C*(10**params['log_eta'])
         burnin = np.intc(1/(tau*L)) # burnin for denoising is usually short, one gradient step with step size 1/L lands at y
         n_samples = params['iterations']+burnin
         eff = params['efficient']
         
-        # output_means = np.reshape(np.reshape(np.array([1,2,5]),(1,-1))*np.reshape(10**np.arange(6),(-1,1)),(-1,))     # 1,2,5,10,20,50,... until max number of samples is reached
-        # output_means = output_means[output_means<=n_samples]
-        with open(result_root+'/'+'{}_log-epsilon-2.0_10000-samples.npy'.format(test_image_name),'rb') as f:
-            _,_,_,mmse_ref,_ = np.load(f)               # ground truth, noisy, map, sample mean and sample std
-        mmse_reference = mmse_ref
-        stopcrit = lambda sampler : (sampler.iter>sampler.burnin and np.sqrt(np.sum((mmse_reference - sampler.sum/(sampler.iter-sampler.burnin))**2)/np.sum((mmse_reference)**2)) < 0.01)
-        ipgla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, stop_crit=stopcrit)
+        output_means = np.reshape(np.reshape(np.array([1,2,5]),(1,-1))*np.reshape(10**np.arange(6),(-1,1)),(-1,))     # 1,2,5,10,20,50,... until max number of samples is reached
+        output_means = output_means[output_means<=n_samples]
+        
+        ipgla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, output_means=output_means)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipgla.simulate(verbose=verb)
         
-        # running_means = ipla.output_means
-        # n_means,I_running_means = running_means.shape[-1],ipla.I_output_means
+        running_means = ipgla.output_means
+        n_means,I_running_means = running_means.shape[-1],ipgla.I_output_means
         
         #%% plots
-        # diagnostic plot, making sure the sampler looks plausible
+        # diagnostic plots to make sure the sampler looks plausible
         # plt.figure()
         # plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
         # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
@@ -137,7 +135,7 @@ def main():
         # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         # plt.show()
         
-        my_imshow(ipgla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
+        my_imshow(ipgla.mean, 'Sample Mean, epsilon=C*eta with log10(eta)={}'.format(params['log_eta']))
         my_imshow(ipgla.mean[314:378,444:508],'sample mean details')
         logstd = np.log10(ipgla.std)
         my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
@@ -147,9 +145,9 @@ def main():
         
         #%% saving
         # with open(results_file,'wb') as f:
-            # np.save(f,(x,y,u,ipgla.mean,ipgla.std))   # ground truth, noisy, map, sample mean and sample std
-            # np.save(f,running_means)              # running means
-            # np.save(f,I_running_means)            # indices to which these means belong
+        #     np.save(f,(x,y,u,ipgla.mean,ipgla.std))   # ground truth, noisy, map, sample mean and sample std
+        #     np.save(f,running_means)              # running means
+        #     np.save(f,I_running_means)            # indices to which these means belong
     else:
         with open(results_file,'rb') as f:
             x,y,u,mn,std = np.load(f)               # ground truth, noisy, map, sample mean and sample std
@@ -205,7 +203,7 @@ def print_help():
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
     print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
-    print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
+    print('    -l (--log_eta=): log-10 of the accuracy parameter eta. The method will report the total number of iterations in the proximal computations for this epsilon = C*10**log_eta in verbose mode')
     print('    -d (--result_dir=): root directory for results. Default: ./results/deblur-wavelets')
     print('    -v (--verbose): Verbose mode.')
     
@@ -229,8 +227,8 @@ if __name__ == '__main__':
             params['testfile_path'] = arg
         elif opt in ("-e","--efficient_off"):
             params['efficient'] = False
-        elif opt in ("-l", "--log_epsilon"):
-            params['log_epsilon'] = float(arg)
+        elif opt in ("-l", "--log_eta"):
+            params['log_eta'] = float(arg)
         elif opt in ("-d","--result_dir"):
             params['result_root'] = arg
         elif opt in ("-v", "--verbose"):

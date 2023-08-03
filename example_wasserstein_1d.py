@@ -21,7 +21,7 @@ params = {
     'iterations_pxmala': 100000,
     'verbose': True,
     'step_type': 'decay',        # 'decay','fixed'
-    'inexactness_type': 'decay', # 'fixed','decay','none'
+    'inexactness_type': 'none', # 'fixed','decay','none'
     'epsilon': 0.01,
     'rate': -1.0,
     'result_root': './results/wasserstein-dists-validation',

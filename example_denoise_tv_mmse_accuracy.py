@@ -19,11 +19,11 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations_max': 10000,
+    'iterations_max': 1000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': np.arange(0,-2.1,-0.2),
-    'mmse_accuracy': 0.01,
+    'log_epsilon': np.arange(-2,-4.9,-0.2),
+    'mmse_accuracy': 0.05,
     'step': 'large',
     'efficient': True,
     'verbose': True,
@@ -62,7 +62,7 @@ def main():
     results_file = result_root+'/'+file_specifier+'.npy'
     
     #%% Ground truth
-    if not os.path.exists(results_file):
+    if True:#not os.path.exists(results_file):
         rng = default_rng(6346534)
         verb = params['verbose']
         try:
@@ -94,7 +94,8 @@ def main():
             
         #%% MAP computation - L2-TV denoising (ROF)
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        u,its = tv.inexact_prox(y, gamma=noise_std**2, epsilon=1e2, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
+        C = mu_tv*tv(y)
+        u,its = tv.inexact_prox(y, gamma=noise_std**2, epsilon=C*1e-4, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
         
         my_imshow(u,'MAP (FISTA on dual, mu_TV = {:.1f})'.format(mu_tv))
@@ -119,7 +120,7 @@ def main():
         n_samples = np.zeros((n_epsilons,))
         prox_its = np.zeros((n_epsilons,))
         prox_its_per_sample = np.zeros((n_epsilons,))
-        C = tau*mu_tv*tv(u)
+        C = mu_tv*tv(y)
         for i,l in enumerate(params['log_epsilon']):
             epsilon = C*(10**l)
             
@@ -130,12 +131,12 @@ def main():
             n_samples[i] = ipgla.n_iter-burnin
             prox_its[i] = ipgla.num_prox_its_total
             prox_its_per_sample[i] = prox_its[i]/n_samples[i]
-        
-        with open(results_file,'wb') as f:
-            np.save(f,C*(10**params['log_epsilon']))
-            np.save(f,n_samples)
-            np.save(f,prox_its)
-            np.save(f,prox_its_per_sample)
+            print('Number of inner iterations per proximal point: {}'.format(prox_its_per_sample[i]))
+        # with open(results_file,'wb') as f:
+            # np.save(f,C*(10**params['log_epsilon']))
+            # np.save(f,n_samples)
+            # np.save(f,prox_its)
+            # np.save(f,prox_its_per_sample)
     else:
         print('Results file for this parameter already existed! Plotting the result:')
         with open(results_file,'rb') as f:

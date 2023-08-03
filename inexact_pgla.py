@@ -91,7 +91,7 @@ class inexact_pgla():
             if self.eff and self.iter in self.I_output_means:
                 self.output_means[...,j] = self.sum/(self.iter-self.burnin)
                 j+=1
-            if verbose and self.iter%100==0: 
+            if verbose and self.iter%1==0: 
                 progress = int(self.iter/self.n_iter*100)
                 sys.stdout.write('\b'*5 + '{:3d}% '.format(progress))
                 sys.stdout.flush()
