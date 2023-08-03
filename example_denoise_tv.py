@@ -144,10 +144,10 @@ def main():
         print('No. iterations per sampling step: {:.1f}'.format(ipgla.num_prox_its_total/(ipgla.n_iter-ipgla.burnin)))
         
         #%% saving
-        # with open(results_file,'wb') as f:
-        #     np.save(f,(x,y,u,ipgla.mean,ipgla.std))   # ground truth, noisy, map, sample mean and sample std
-        #     np.save(f,running_means)              # running means
-        #     np.save(f,I_running_means)            # indices to which these means belong
+        with open(results_file,'wb') as f:
+            np.save(f,(x,y,u,ipgla.mean,ipgla.std))   # ground truth, noisy, map, sample mean and sample std
+            np.save(f,running_means)              # running means
+            np.save(f,I_running_means)            # indices to which these means belong
     else:
         with open(results_file,'rb') as f:
             x,y,u,mn,std = np.load(f)               # ground truth, noisy, map, sample mean and sample std
