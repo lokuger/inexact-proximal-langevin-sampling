@@ -21,15 +21,14 @@ def main():
     fig1,ax1 = plt.subplots(1,1)
     ax1.set_xscale("log")
     ax1.set_yscale("log")
-    ax1.set_xlabel(r'$\eta$')
+    ax1.set_xlabel(r'$\tilde \epsilon$')
     ax1.set_ylabel('Total inner iterations')
-    ax1.set_ylim([5e1,1e5])
     
     fig2,ax2 = plt.subplots(1,1)
     ax2.set_xscale("log")
-    ax2.set_xlabel(r'$\eta$')
-    ax2.set_ylabel('Number of samples '+r'$k^{\ast}$')
-    ax2.set_ylim([0,300])
+    ax2.set_yscale("log")
+    ax2.set_xlabel(r'$\tilde \epsilon$')
+    ax2.set_ylabel('Langevin iterations '+r'$k^{\ast}$')
     colors = ['b','r','g','y','m','c','k','r']
     markers = ['^','v','o','s','*','H','X','D']
     
@@ -42,21 +41,26 @@ def main():
             prox_its = np.load(f)
             prox_its_per_sample = np.load(f)
             
-            eta = 10**np.arange(-2,-4.1,-0.2)
-            I = n_samples<1e4
+            epsilon = 10**np.arange(-2,-4.1,-0.2)
+            I = np.logical_and(n_samples<1e4,epsilon > 3e-4)
             
             s = '{:g}'.format(mmse_err)
             # ax1.plot(epsilons,prox_its,colors[i]+'-'+markers[i],label=r'$\mathrm{err}^{\mathrm{MMSE}}_{\mathrm{rel}}=$'+'{:s}'.format(s))
-            ax1.plot(eta[I],prox_its[I],colors[i]+'-'+markers[i],label=r'$\kappa=$'+'{:s}'.format(s))
+            ax1.plot(epsilon[I],prox_its[I],colors[i]+'-'+markers[i],label=r'$\delta=$'+'{:s}'.format(s))
             # ax2.plot(epsilons,n_samples,colors[i]+'-'+markers[i],label=r'$\mathrm{err}^{\mathrm{MMSE}}_{\mathrm{rel}}=$'+'{:s}'.format(s))
-            ax2.plot(eta[I],n_samples[I],colors[i]+'-'+markers[i],label=r'$\kappa=$'+'{:s}'.format(s))
+            ax2.plot(epsilon[I],n_samples[I],colors[i]+'-'+markers[i],label=r'$\delta=$'+'{:s}'.format(s))
             
     ax1.legend(loc='lower left')
-    ax2.legend(loc='upper left')
+    ax2.legend(loc='lower left')
     # ax.set_xlim(1,xmax+0.2)
     
-    fig1.savefig(res_dir+'/prox_its_MMSE_accuracy.pdf')
-    fig2.savefig(res_dir+'/n_samples_MMSE_accuracy.pdf')
+    for ax in [ax1, ax2]:
+        for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
+                 ax.get_xticklabels() + ax.get_yticklabels()+ax.get_legend().get_texts()):
+            item.set_fontsize(18)
+    
+    fig1.savefig(res_dir+'/prox_its_MMSE_accuracy.pdf',bbox_inches='tight')
+    fig2.savefig(res_dir+'/n_samples_MMSE_accuracy.pdf',bbox_inches='tight')
         
 
 if __name__ == '__main__':

@@ -18,12 +18,14 @@ from inexact_pgla import inexact_pgla
 import potentials as pot
 import distributions as pds
 
+plt.rcdefaults()
+
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100,
+    'iterations': 10000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_eta': -2.0,
+    'log_eta': -4.0,
     'efficient': True,
     'verbose': True,
     'result_root': './results/denoise-tv',
@@ -46,8 +48,28 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
     plt.show()
     
     # draw a new figure and replot the colorbar there
+    # Set the figure size in inches (width, height)
+    fig = plt.figure(figsize=(0.5*0.6*6.15, 0.5*3.1*6.15))
+    ax = fig.add_axes((0.05,0.05,0.2,0.9))
+    # fig,ax = plt.subplots(figsize=(0.5*0.6*6.15, 0.5*3.1*6.15))
+    
+    # Create a plot
+    plt.colorbar(q,cax=ax)
+    
+    # Set tick label font sizes
+    plt.tick_params(axis='y', labelsize=30)  # Adjust the fontsize as needed
+    
+    # Fine-tune layout parameters to ensure labels fit within the figure
+    plt.tight_layout()
+    
+    # Save the figure as a PDF file
+    plt.savefig(params['result_root']+'/cbar-mean.pdf', bbox_inches='tight')
+    print(fig.get_size_inches())
+    
+    # Display the plot (optional)
+    plt.show()
     # fig,ax = plt.subplots(figsize=(2,3))
-    # plt.colorbar(q,ax=ax)
+    # plt.colorbar(q,cax=ax)
     # ax.remove()
     # plt.savefig(cbarfile,bbox_inches='tight')
 
@@ -151,8 +173,8 @@ def main():
     else:
         with open(results_file,'rb') as f:
             x,y,u,mn,std = np.load(f)               # ground truth, noisy, map, sample mean and sample std
-            # running_means = np.load(f)              # running means
-            # I_running_means = np.load(f)            # indices to which these means belong
+            running_means = np.load(f)              # running means
+            I_running_means = np.load(f)            # indices to which these means belong
         logstd = np.log10(std)
         
         # with open(result_root+'/'+'{}_log-epsilon-2.0_10000-samples.npy'.format(test_image_name),'rb') as f:
@@ -174,10 +196,15 @@ def main():
         # logstd_max = np.max(logstd)
         
         my_imshow(x, 'ground truth')
+        my_imshow(x[314:378,444:508], 'ground truth detail')
         my_imshow(y, 'noisy')
+        my_imshow(y[314:378,444:508], 'noisy detail')
         my_imshow(u, 'map')
+        my_imshow(u[314:378,444:508], 'map detail')
         my_imshow(mn, 'mean')
+        my_imshow(mn[314:378,444:508], 'mean detail')
         my_imshow(logstd, 'logstd', -1.8, -0.6)
+        my_imshow(logstd[314:378,444:508],'logstd details', -1.8, -0.6)
         print('MMSE estimate PSNR: {:.4f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         my_imsave(x,result_root+'/ground_truth.png')

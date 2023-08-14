@@ -150,7 +150,7 @@ def main():
         ax.set_title('#Prox iterations until {}% MMSE error'.format(params['mmse_accuracy']))
         ax.set_xscale("log")
         ax.set_xlabel(r'$\varepsilon$')
-        ax.set_ylabel('Total inner iterations')
+        ax.set_ylabel('Total (inner) prox iterations')
         ax.plot(epsilons,prox_its,'b^-')
         
         plt.figure()
@@ -158,7 +158,7 @@ def main():
         ax.set_title('#Samples until {}% MMSE error'.format(params['mmse_accuracy']))
         ax.set_xscale("log")
         ax.set_xlabel(r'$\varepsilon$')
-        ax.set_ylabel('Number of samples')
+        ax.set_ylabel('Number of (outer) Langevin iterations')
         ax.plot(epsilons,n_samples,'kv-')
         
     

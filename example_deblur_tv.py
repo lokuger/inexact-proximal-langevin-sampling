@@ -21,14 +21,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100000,
-    'testfile_path': 'test-images/flintstones.png',
+    'iterations': 10000,
+    'testfile_path': 'test-images/owl.jpeg',
     'blurtype': 'gaussian',
     'bandwidth': 1.5,
     'noise_std': 0.1,
     'log_epsilon': -4.0,
     'iter_prox': np.Inf,
-    'step': 'large',
     'efficient': True,
     'verbose': True,
     'result_root': './results/deblur-tv',
@@ -128,7 +127,7 @@ def main():
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
         # handle images that are too large
-        Nmax = 256
+        Nmax = 128
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         
         # chess test image
@@ -205,7 +204,7 @@ def main():
         
         #%% regularization parameter
         # mu_tv = s.mean_theta[-1]          # computed by SAPG
-        mu_tv = 1.85                       # set by hand, tuned for best MAP PSNR
+        mu_tv = 2.5                       # set by hand, tuned for best MAP PSNR
             
         #%% MAP computation - L2-TV deblurring
         # deblur using PDHG in the version f(Kx) + g(x) + h(x) with smooth h
@@ -229,10 +228,7 @@ def main():
             
         #%% sample using inexact PLA
         x0 = np.copy(u) # np.zeros_like(x)
-        if params['step'] == 'large':
-            tau = 1/L
-        elif params['step'] == 'small':
-            tau = 0.5/L
+        tau = 1/L
         iter_prox = params['iter_prox']
         C = tau*mu_tv*tv(u)
         epsilon_prox = C * 10**params['log_epsilon'] if params['log_epsilon'] is not None else None
@@ -251,12 +247,12 @@ def main():
         plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
         plt.show()
-        # plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
-        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        # plt.show()
-        # plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
-        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        # plt.show()
+        plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        plt.show()
+        plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        plt.show()
         plt.plot(np.arange(1,n_samples+1), ipla.dgap_vals)
         plt.title('duality gap values')
         plt.show()
@@ -280,9 +276,9 @@ def main():
         # my_imsave(mn, results_dir+'/posterior_mean.png')
         # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.33,-0.83)
         
-        # my_imshow(x, 'ground truth')
-        # my_imshow(y, 'blurred & noisy')
-        # my_imshow(u, 'map estimate')
+        my_imshow(x, 'ground truth')
+        my_imshow(y, 'blurred & noisy')
+        my_imshow(u, 'map estimate')
         my_imshow(mn, 'post. mean / mmse estimate')
         my_imshow(logstd, 'posterior log std', -0.6, -0.25)
         print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
