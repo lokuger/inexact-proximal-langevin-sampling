@@ -26,7 +26,7 @@ params = {
     'blurtype': 'gaussian',
     'bandwidth': 1.5,
     'noise_std': 0.1,
-    'log_epsilon': 0.0,
+    'log_epsilon': -2.0,
     'iter_prox': np.Inf,
     'efficient': True,
     'verbose': True,
@@ -99,11 +99,27 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
     if cbar: fig.colorbar(q)
     plt.show()
     
-    # # draw a new figure and replot the colorbar there
-    # fig,ax = plt.subplots(figsize=(2,3))
-    # plt.colorbar(q,ax=ax)
-    # ax.remove()
-    # plt.savefig(cbarfile,bbox_inches='tight')
+    # draw a new figure and replot the colorbar there
+    # Set the figure size in inches (width, height)
+    fig = plt.figure(figsize=(0.5*0.6*6.15, 0.5*3.1*6.15))
+    ax = fig.add_axes((0.05,0.05,0.2,0.9))
+    # fig,ax = plt.subplots(figsize=(0.5*0.6*6.15, 0.5*3.1*6.15))
+    
+    # Create a plot
+    plt.colorbar(q,cax=ax)
+    
+    # Set tick label font sizes
+    plt.tick_params(axis='y', labelsize=30)  # Adjust the fontsize as needed
+    
+    # Fine-tune layout parameters to ensure labels fit within the figure
+    plt.tight_layout()
+    
+    # Save the figure as a PDF file
+    plt.savefig(params['result_root']+'/cbar-mean.pdf', bbox_inches='tight')
+    print(fig.get_size_inches())
+    
+    # Display the plot (optional)
+    plt.show()
 
 #%% Main method - generate results directories
 def main():
@@ -167,44 +183,9 @@ def main():
         my_imshow(x,'ground truth')
         my_imshow(y,'noisy image')
         
-        #%% SAPG - compute the optimal regularization parameter
-        # unscaled_posterior = pds.l2_deblur_tv(n, n, a, at, y, noise_std=noise_std, mu_tv=1)
-        # # metaparameter of the posterior: L = Lipschitz constant of nabla F, necessary for stepsize
-        
-        # theta0 = 1
-        # # empirically, for blur b=10 we need ~1000 warm up iterations with tau = 0.9/L. 
-        # # for blur=5 roughly 500 warm up iterations
-        # # For b=0 almost immediate warm-up since the noisy image seems to be in a region of high probability
-        # s = sapg(iter_wu=25,iter_outer=60,iter_burnin=10,iter_inner=1,
-        #           tau=0.9/L,delta=lambda k: 0.2/(theta0*n**2)*(k+1)**(-0.8),
-        #           x0=x,theta0=theta0,theta_min=0.01,theta_max=1e2,
-        #           epsilon_prox=3e-2,pd=unscaled_posterior)
-        # ###################### change initialization later : iter_wu back to 500, x0 back to y
-        # s.simulate()
-        # mu_tv = s.mean_theta[-1]
-        
-        ##### -- plots to check that SAPG converged --
-        # # log pi values during warm-up Markov chain
-        # plt.plot(s.logpi_wu, label='log-likelihood warm-up samples')
-        # plt.legend()
-        # plt.show()
-        
-        # # thetas
-        # plt.plot(s.theta,label='theta_n')
-        # plt.plot(n**2/s.mean_g, label='dim/g(u_n)', color='orange')
-        # plt.plot(np.arange(s.iter_burnin+1,s.iter_outer+1), s.mean_theta, label='theta_bar',color='green')
-        # plt.legend()
-        # plt.show()
-        
-        # # values g(X_n)
-        # plt.plot(s.mean_g, label='g(u_n)')
-        # plt.hlines(tv_groundtruth,0,len(s.mean_g)+1, label='g(u_true)')
-        # plt.legend()
-        # plt.show()
-        
         #%% regularization parameter
         # mu_tv = s.mean_theta[-1]          # computed by SAPG
-        mu_tv = 2.5                       # set by hand, tuned for best MAP PSNR
+        mu_tv = 2.5
             
         #%% MAP computation - L2-TV deblurring
         # deblur using PDHG in the version f(Kx) + g(x) + h(x) with smooth h
@@ -270,17 +251,18 @@ def main():
         #%% results were already computed, show images
         x,y,u,mn,std = np.load(results_file)
         logstd = np.log10(std)
-        # my_imsave(x, results_dir+'/ground_truth.png')
-        # my_imsave(y, results_dir+'/noisy.png')
-        # my_imsave(u, results_dir+'/map.png')
-        # my_imsave(mn, results_dir+'/posterior_mean.png')
-        # my_imsave(logstd, results_dir+'/posterior_logstd.png',-1.33,-0.83)
+        my_imsave(x, result_root+'/ground_truth.png')
+        my_imsave(y, result_root+'/noisy.png')
+        my_imsave(u, result_root+'/map.png')
+        my_imsave(mn, result_root+'/posterior_mean.png')
+        my_imsave(logstd, result_root+'/posterior_logstd.png',-0.68,-0.4)
         
-        my_imshow(x, 'ground truth')
-        my_imshow(y, 'blurred & noisy')
-        my_imshow(u, 'map estimate')
+        # my_imshow(x, 'ground truth')
+        # my_imshow(y, 'blurred & noisy')
+        # my_imshow(u, 'map estimate')
         my_imshow(mn, 'post. mean / mmse estimate')
-        my_imshow(logstd, 'posterior log std',-0.68,-0.38)
+        # my_imshow(logstd, 'posterior log std',-0.68,-0.4)
+        print('MAP PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
         print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         
