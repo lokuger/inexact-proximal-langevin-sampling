@@ -21,12 +21,12 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
+    'iterations': 100000,
     'testfile_path': 'test-images/owl.jpeg',
     'blurtype': 'gaussian',
     'bandwidth': 1.5,
     'noise_std': 0.1,
-    'log_epsilon': -4.0,
+    'log_epsilon': 0.0,
     'iter_prox': np.Inf,
     'efficient': True,
     'verbose': True,
@@ -127,7 +127,7 @@ def main():
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
         # handle images that are too large
-        Nmax = 128
+        Nmax = 256
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         
         # chess test image
@@ -280,7 +280,7 @@ def main():
         my_imshow(y, 'blurred & noisy')
         my_imshow(u, 'map estimate')
         my_imshow(mn, 'post. mean / mmse estimate')
-        my_imshow(logstd, 'posterior log std', -0.6, -0.25)
+        my_imshow(logstd, 'posterior log std',-0.68,-0.38)
         print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         

@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 12})
 
 params = {
-    'step_type': 'fixed', # 'decay' or 'fixed'
+    'step_type': 'decay', # 'decay' or 'fixed'
     'inexactness_type': 'decay', # 'decay', 'fixed', 'none'
-    'add_none': False,
+    'add_none': True,
     }
 
 def main():
@@ -96,7 +96,7 @@ def main():
     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
              ax.get_xticklabels() + ax.get_yticklabels()+ax.get_legend().get_texts()):
         item.set_fontsize(22)
-    plt.savefig(res_dir+'/W2_plots' + ('_with_none' if params['add_none'] else '') + '.pdf')
+    plt.savefig(res_dir+'/W2_plots' + ('_with_none' if params['add_none'] else '') + '.pdf',bbox_inches='tight')
         
 
 if __name__ == '__main__':
