@@ -160,6 +160,29 @@ class l1_loss_unshifted_homoschedastic():
     def conj_prox(self, p, gamma):
         return p/np.maximum(1,np.abs(p)/self.scale)
     
+class kl_divergence():
+    """
+    Kullback-Leibler divergence 
+        KL(Ax+b; y) = sum_i (Ax)_i + b_i - y_i + y_i*log(y_i/(Ax+b)_i)
+    Inputs:
+        - y:        right hand side data
+        - b:        estimated background in data space
+        - a:        forward operator A, given as callable a(x)
+        - at:       transpose/adjoint of A. Given as callable at(y)
+    """
+    def __init__(self, y, b, a, at):
+        self.y = y      # data
+        self.b = b      # background
+        self.a = a      # forward model
+        self.at = at    # adjoint of forward model
+    
+    def __call__(self, x):
+        axb = self.a(x) + self.b
+        return sum(axb - self.y + self.y * np.log(self.y/(axb)))
+    
+    def grad(self, x):
+        ax = self.a(x)
+        self.at(1 - self.y/(ax+self.b))
     
 class total_variation():
     """
@@ -289,6 +312,135 @@ class total_variation():
         if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
         return (u - gamma*self._imdiv(p)), i
         
+
+class total_variation_nonneg():
+    """
+    total variation of 2D image u with shape (n1, n2), if u is in the 
+    positive orthant. Otherwise, infinity. Scaled by a constant
+    regularization parameter scale. Corresponds to the functional 
+        scale * TV(u) + 1_{R+}(u)
+    with u in R^{n1 x n2}, where 1_{R+} is indicator of R^n_+
+    
+    __init__ input:
+        - n1, n2:   shape of u
+        - scale:    scaling factor, usually a regularization parameter
+        
+    __call__ input:
+        - u:        image of shape n1,n2 or n1*n2,
+    """
+    def __init__(self, n1, n2, scale=1):
+        self.n1 = n1
+        self.n2 = n2
+        self.scale = scale
+        
+    def _imgrad(self, u):
+        """
+        applies a 2D image gradient to the image u of shape (n1,n2)
+        
+        Parameters
+        ----------
+        u : numpy 2D array, shape n1, n2
+            Image
+
+        Returns
+        -------
+        (px,py) image gradients in x- and y-directions.
+
+        """
+        px = np.concatenate((u[1:,:]-u[0:-1,:], np.zeros((1,self.n2))),axis=0)
+        py = np.concatenate((u[:,1:]-u[:,0:-1], np.zeros((self.n1,1))),axis=1)
+        return np.concatenate((px[np.newaxis,:,:],py[np.newaxis,:,:]), axis=0)
+    
+    def _imdiv(self, p):
+        """
+        Computes the negative divergence of the 2D vector field px,py.
+        can also be seen as a tensor from R^(n1xn2x2) to R^(n1xn2)
+
+        Parameters
+        ----------
+            - p : 2 x n1 x n2 np.array
+
+        Returns
+        -------
+            - divergence, n1 x n2 np.array
+        """
+        u1 = np.concatenate((-p[0,0:1,:], -(p[0,1:-1,:]-p[0,0:-2,:]), p[0,-2:-1,:]), axis = 0)
+        u2 = np.concatenate((-p[1,:,0:1], -(p[1,:,1:-1]-p[1,:,0:-2]), p[1,:,-2:-1]), axis = 1)
+        return u1+u2
+    
+    def __call__(self, u):
+        """
+        Computes the TV-seminorm of u
+        
+        Parameters 
+        ----------
+        u : numpy array of shape n1, n2
+        
+        Returns
+        -------
+        TV(u) (scalar)
+        """
+        return self.scale * np.sum(np.sqrt(np.sum(self._imgrad(u)**2,axis=0))) if np.all(u>=0) else np.infty
+    
+    def inexact_prox(self, u, gamma, epsilon=None, max_iter=np.Inf, verbose=False):
+        """
+        Compute an approximation of the inexact prox. Ineactness level epsilon is not quite clear, we tried
+        to generalize Proposition 2.3 from Villa et al. 2013 to the case when not g(x) = w(Bx) but rather 
+            g(x) = w(Bx) + 1_C(x)
+        with an indicator of a convex set C (in this case positive orthant). It did not work, however!
+        Strong duality holds as before and we can relate primal and dual iterates, but the implication 
+            [duality gap at (p(v),v) < epsilon) => p(v) is epsilon-inexact prox point]
+        is not true anymore since the projection messes up the computations. We will use it anyway, however, 
+        since it is clear that primal and dual problems are convex and similarly easy to solve and the 
+        duality gap is not too far off once we have entirely positive samples and sufficiently small steps..
+            
+        inexact_prox(self, u, gamma=1, epsilon=None, maxiter=np.Inf, verbose=False)
+        parameters:
+            - u:        image to be denoised, shape self.n1, self.n2
+            - gamma:    prox step size
+            - epsilon:  accuracy for duality gap stopping criterion
+            - maxiter:  maximum number of iterations
+            - verbose:  verbosity
+        """
+        if epsilon is None and max_iter is np.Inf:
+            raise ValueError('provide either an accuracy or a maximum number of iterations to the tv prox please')
+        checkAccuracy = True if epsilon is not None else False
+        nusq = np.sum(u**2)
+
+        # iterative scheme to minimize the dual objective
+        p = np.zeros((2,self.n1,self.n2))
+        q = np.copy(p)
+        
+        stopcrit = False
+        t, t_prev = 1, 1
+        
+        i = 0
+        if verbose: sys.stdout.write('run FISTA on dual ROF model with nonnegativity constraint: {:3d}% '.format(0)); sys.stdout.flush()
+        
+        while i < max_iter and not stopcrit:
+            i = i + 1
+            p_prev = np.copy(p)
+            
+            v = q + 1/(8*gamma) * self._imgrad(np.maximum(0, u-gamma*self._imdiv(q)))
+            p = v/np.maximum(1, np.sqrt(np.sum(v**2,axis=0))/self.scale)[np.newaxis,:,:]
+            
+            t_new = (1+np.sqrt(1+4*t**2))/2
+            t, t_prev = t_new, t
+            q = p + (t_prev-1)/t * (p - p_prev)
+            
+            # stopping criterion: check if primal-dual gap < epsilon
+            if checkAccuracy:
+                x_primal = np.maximum(0,u - gamma*self._imdiv(p))   # same as before but project onto R^n_+ orthant
+                primal = self(x_primal) + 1/(2*gamma) * np.sum((x_primal-u)**2)
+                conj_TV_p = np.max(np.sqrt(np.sum(p**2,axis=0)))
+                dual = conj_TV_p + 1/(2*gamma)*(np.sum(x_primal**2) - nusq) # dual value. dual iterate should never be inadmissible since we project in the end
+                dgap = primal+dual
+                stopcrit = dgap <= epsilon
+                if dgap < -5e-15: # for debugging purpose
+                    raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
+                if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
+        if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
+        return (u - gamma*self._imdiv(p)), i
     
 class l2_l1_norm():
     """This class implements the norm
