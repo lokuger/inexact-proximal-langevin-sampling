@@ -76,6 +76,46 @@ class l2_deblur_tv():
         """ compute the unscaled density, assuming x is n x n """
         return np.exp(-self.f(x)-self.g(x))
     
+class kl_deblur_tvnonneg_prior():
+    """
+    Represents posterior for a Kullback-Leibler as negative log-likelihood
+    and a TV regularization term scaled by a parameter mu_TV.
+    Potential:
+        
+        V(u) = F(u) + G(u) with
+        
+        F(u) = KL(A*u + b, y)
+        G(u) = mu * TV(u) + 1_{R+}(u)
+    
+    Instantiation input:
+    n1, n2:     dimensions of image
+    a, at:      blur operator and its transpose
+    y:          observed data in the Kullback-Leibler loss
+    b:          estimated background parameter, of same size as y
+    mu_tv:      TV regularization parameter
+    """
+    def __init__(self, n1, n2, a, at, max_ev_ata, y, b, mu_tv=1):
+        self.d = n1*n2
+        self.n1 = n1
+        self.n2 = n2
+        self.a = a
+        self.at = at
+        self.max_ev_ata = max_ev_ata
+        self.y = y
+        self.b = b
+        assert(np.all(self.b.shape == self.y.shape))
+        self.mu_tv = mu_tv
+        
+        self.f = pot.kl_divergence(self.y,self.b,self.a,self.at)
+        self.g = pot.total_variation_nonneg(self.n1,self.n2,self.mu_tv)
+    
+    def pdf(self, x):
+        raise NotImplementedError("Cannot compute the correct pdf because normalization constant is unknown. Please use .unscaled_pdf(x)")
+        
+    def unscaled_pdf(self, x):
+        """ compute the unscaled density, assuming x is n x n """
+        return np.exp(-self.f(x)-self.g(x))
+
 class l2_l1prior():
     """
     Represents posterior for an L2/Gaussian data loss together with a 
