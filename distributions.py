@@ -94,13 +94,12 @@ class kl_deblur_tvnonneg_prior():
     b:          estimated background parameter, of same size as y
     mu_tv:      TV regularization parameter
     """
-    def __init__(self, n1, n2, a, at, max_ev_ata, y, b, mu_tv=1):
+    def __init__(self, n1, n2, a, at, y, b, mu_tv=1):
         self.d = n1*n2
         self.n1 = n1
         self.n2 = n2
         self.a = a
         self.at = at
-        self.max_ev_ata = max_ev_ata
         self.y = y
         self.b = b
         assert(np.all(self.b.shape == self.y.shape))
