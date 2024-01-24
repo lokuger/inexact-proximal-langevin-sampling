@@ -12,7 +12,10 @@ class inexact_pgla():
         - burnin        : number of burnin samples to throw away
         - pd            : probability distribution, object of distributions.py3q
         Optional parameters
-        - step-size             : iPGLA step-size (tau), either a scalar or a handle for iteration number input
+        - step-size             : has to be None (then we try to use 1/L if L is specified) or a tuple declaring the step size choice. step_size[0] must be one of 
+                                    - 'fxd' (then step_size[1] must be the fixed value)
+                                    - 'fun' (then step_size[1] must be a function of the iteration number, used for decreasing choices of step size)
+                                    - 'bt' (for backtracking, then step_size[1] is used as an initial guess)
         - rng (default_rng())   : random number generator for reproducibility, init new one if None
         - epsilon_prox (1e-2)   : prox accuracy, either a scalar or a handle of n as epsilon(n). If epsilon == 0, equivalent to setting exact=True
         - iter_prox (np.Inf)    : number of iterations for prox, can be given as alternative to epsilon
@@ -25,8 +28,18 @@ class inexact_pgla():
         self.burnin = burnin
         self.iter = 0
         self.rng = rng if rng is not None else default_rng()    # for reproducibility allow to pass rng
-        step_size = step_size if step_size is not None else 1/pd.f.L
-        self.step_size = (lambda n : step_size) if np.isscalar(step_size) else step_size
+        if step_size is None:
+            self.step_type = 'fxd'
+            self.step_size = 1/pd.f.l
+        else:
+            self.step_type = step_size[0]
+            if self.step_type == 'fxd':
+                self.step_size = step_size[1]
+            elif self.step_type == 'fun':
+                self.step_fun = step_size[1]
+            elif self.step_type == 'bt':
+                self.tau_old = step_size[1]
+                self.tau_all = np.zeros((n_iter,))
         
         self.shape_x = x0.shape
         self.eff = efficient
@@ -134,25 +147,20 @@ class inexact_pgla():
         if not self.exact:
             epsilon_prox = self.epsilon_prox(self.iter) if self.epsilon_prox is not None else None
             iter_prox = self.iter_prox
-        
+
+        prox_g = lambda u, tau: self.prox_g(u,tau) if self.exact else lambda u, tau: self.inexact_prox_g(u, tau, epsilon=epsilon_prox, max_iter=iter_prox)
+        x = self.x if self.eff else self.x[...,self.iter-1]
+        res = prox_g(x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size)     # note that res has variable number of elements, since the inexact prox routines also output the number of iterations for diagnostics
+        (x_new,num_prox_its) = (res,0) if self.exact else res
+        self.dfx = self.df(x_new)
+        self.logpi_vals[self.iter-1] = self.f(x_new) + self.g(x_new)
         if self.eff:
-            if self.exact:
-                self.x, num_prox_its = self.prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size), 0
-            else:
-                self.x, num_prox_its = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
-                # self.x, num_prox_its, self.dgap_vals[self.iter-1] = self.inexact_prox_g(self.x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
-            self.dfx = self.df(self.x)
-            self.logpi_vals[self.iter-1] = self.f(self.x) + self.g(self.x)
+            self.x = x_new
             if self.iter > self.burnin:
                 self.sum = self.sum + self.x
                 self.sum_sq = self.sum_sq + self.x**2
         else:
-            if self.exact:
-                self.x[...,self.iter], num_prox_its = self.prox_g(self.x[...,self.iter-1]-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size), 0
-            else:
-                self.x[...,self.iter], num_prox_its = self.inexact_prox_g(self.x[...,self.iter-1]-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size, epsilon=epsilon_prox, max_iter=iter_prox)
-            self.dfx = self.df(self.x[...,self.iter])
-            self.logpi_vals[self.iter-1] = self.f(self.x[...,self.iter]) + self.g(self.x[...,self.iter])
+            self.x[...,self.iter] = x_new
         
         self.num_prox_its[self.iter-1] = num_prox_its
         if self.iter > self.burnin:
