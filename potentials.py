@@ -178,11 +178,14 @@ class kl_divergence():
     
     def __call__(self, x):
         axb = self.a(x) + self.b
-        return sum(axb - self.y + self.y * np.log(self.y/(axb)))
+        if np.any(axb<0) or np.any(self.y<0):
+            return np.Infinity
+        else:
+            I = self.y > 0
+            return np.sum(axb[~I]) + np.sum(axb[I]-self.y[I]+self.y[I]*np.log(self.y[I]/axb[I]))
     
     def grad(self, x):
-        ax = self.a(x)
-        self.at(1 - self.y/(ax+self.b))
+        return self.at(1 - self.y/(self.a(x) + self.b))
     
 class total_variation():
     """
@@ -421,7 +424,7 @@ class total_variation_nonneg():
             i = i + 1
             p_prev = np.copy(p)
             
-            v = q + 1/(8*gamma) * self._imgrad(np.maximum(0, u-gamma*self._imdiv(q)))
+            v = q + 1/8 * self._imgrad(np.maximum(0, u/gamma-self._imdiv(q)))
             p = v/np.maximum(1, np.sqrt(np.sum(v**2,axis=0))/self.scale)[np.newaxis,:,:]
             
             t_new = (1+np.sqrt(1+4*t**2))/2
@@ -440,7 +443,7 @@ class total_variation_nonneg():
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
         if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
-        return (u - gamma*self._imdiv(p)), i
+        return np.maximum(0,u - gamma*self._imdiv(p))
     
 class l2_l1_norm():
     """This class implements the norm
