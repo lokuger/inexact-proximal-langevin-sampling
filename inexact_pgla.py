@@ -142,15 +142,38 @@ class inexact_pgla():
     def update(self):
         self.iter = self.iter + 1
         xi = self.rng.normal(size=self.shape_x)
-        step_size = self.step_size(self.iter-1)
-        
+
+        # set step size
+        if self.step_type == 'fxd':
+            tau = self.step_size
+        elif self.step_type == 'fun':
+            tau = self.step_size(self.iter-1)
+        elif self.step_type == 'bt':
+            tau = 2*self.tau_old
+            m = -0.5*np.sum(self.dfx**2)
+            fx = self.f(x)
+            gamma = 0.7
+            while True:
+                z = x-tau*self.dfx
+                if self.f(z) > fx + tau*m:  # armijo-goldstein cond.
+                    tau *= gamma
+                else:                       # accept step size
+                    self.tau_old,self.tau_all[self.iter-1] = tau,tau
+
+        # set inexactness level
         if not self.exact:
             epsilon_prox = self.epsilon_prox(self.iter) if self.epsilon_prox is not None else None
             iter_prox = self.iter_prox
 
-        prox_g = lambda u, tau: self.prox_g(u,tau) if self.exact else lambda u, tau: self.inexact_prox_g(u, tau, epsilon=epsilon_prox, max_iter=iter_prox)
+        prox_g = (lambda u, tau: self.prox_g(u,tau)) if self.exact else (lambda u, tau: self.inexact_prox_g(u, tau, epsilon=epsilon_prox, max_iter=iter_prox))
         x = self.x if self.eff else self.x[...,self.iter-1]
-        res = prox_g(x-step_size*self.dfx+np.sqrt(2*step_size)*xi, step_size)     # note that res has variable number of elements, since the inexact prox routines also output the number of iterations for diagnostics
+
+        # central update here:
+        # note that res has variable number of elements, since the inexact prox routines should also output the number of iterations for diagnostics
+        z = z if (self.step_type == 'bt') else x-tau*self.dfx   # gradient step
+        res = prox_g(z+np.sqrt(2*tau)*xi, tau)
+
+        # assign output correctly, compute log-density at sample and running mean & std diagnostics
         (x_new,num_prox_its) = (res,0) if self.exact else res
         self.dfx = self.df(x_new)
         self.logpi_vals[self.iter-1] = self.f(x_new) + self.g(x_new)
