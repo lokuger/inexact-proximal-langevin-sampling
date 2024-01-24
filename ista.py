@@ -37,7 +37,7 @@ class ista():
         try:
             self.prox_g = g.prox
         except AttributeError:
-            self.prox_g = lambda x,tau: g.inexact_prox(x,tau,max_iter=300)
+            self.prox_g = lambda x,tau: g.inexact_prox(x,tau,max_iter=300)[0]
         
         # allow a non-efficient form of the algorithm where all iterates are returned, 
         # to be able to plot/compute errors or other diagnostics afterwards
