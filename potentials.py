@@ -443,7 +443,7 @@ class total_variation_nonneg():
                     raise ValueError('Duality gap was negative (which should never happen), please check the prox computation routine!')
                 if verbose: sys.stdout.write('\b'*5 + '{:3d}% '.format(int(i/max_iter*100))); sys.stdout.flush()
         if verbose: sys.stdout.write('\b'*5 + '100% '); sys.stdout.flush()
-        return np.maximum(0,u - gamma*self._imdiv(p))
+        return np.maximum(0,u - gamma*self._imdiv(p)), i
     
 class l2_l1_norm():
     """This class implements the norm
