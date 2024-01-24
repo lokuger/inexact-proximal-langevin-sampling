@@ -70,8 +70,6 @@ class ista():
                         tau *= gamma
                     else :                              # accept step size
                         self.tauold,self.tauall[self.iter-1] = tau,tau
-                        if np.any(np.isnan(z)):
-                            print('nan in iterate')
                         if self.eff:
                             self.x = self.prox_g(z, tau)
                         else:
