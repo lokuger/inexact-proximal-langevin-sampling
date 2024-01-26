@@ -193,16 +193,16 @@ def main():
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
         print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((ipla.mean-x)**2))))
         
-        # my_imsave(x,result_root+'/ground-truth.png',vmin=0,vmax=max_intensity)
-        # my_imsave(y,result_root+'/noisy-obs.png',vmin=0,vmax=max_intensity)
-        # my_imsave(u,result_root+'/map.png',vmin=0,vmax=max_intensity)
-        # my_imsave(ipla.mean, mmse_file, vmin=0, vmax=max_intensity)
-        # my_imsave(np.log10(ipla.std), logstd_file, vmin = np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
-        # for i,scale in enumerate(downsampling_scales):
-        #     my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
+        my_imsave(x,result_root+'/ground-truth.png',vmin=0,vmax=max_intensity)
+        my_imsave(y,result_root+'/noisy-obs.png',vmin=0,vmax=max_intensity)
+        my_imsave(u,result_root+'/map.png',vmin=0,vmax=max_intensity)
+        my_imsave(ipla.mean, mmse_file, vmin=0, vmax=max_intensity)
+        my_imsave(np.log10(ipla.std), logstd_file, vmin = np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
+        for i,scale in enumerate(downsampling_scales):
+            my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
 
         # saving
-        #np.save(results_file,(x,y,u,ipla.mean,ipla.std))
+        np.save(results_file,(x,y,u,ipla.mean,ipla.std) + (() if downsampling_scales is None else (ipla.std_scaled,)))
         
     else:
         pass
@@ -265,7 +265,7 @@ if __name__ == '__main__':
         elif opt in ("-m", "--mu_tv"):
             params['mu_tv'] = float(arg)
         elif opt in ("-p", "--iter_prox"):
-            params['iter_prox'] = arg
+            params['iter_prox'] = int(arg)
         elif opt in ("-d","--result_dir"):
             params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
