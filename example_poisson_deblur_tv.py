@@ -19,9 +19,10 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
-    'testfile_path': 'test-images/phantom128.png',
-    'bandwidth': 3,
+    'iterations': 1000,
+    'testfile_path': 'test-images/phantom256.png',
+    'mu_tv': 5e-1,
+    'bandwidth': 5,
     'mean_intensity': 10,
     'mean_bg':  0.1,
     'iter_prox': 100,
@@ -83,7 +84,8 @@ def main():
     
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
     accuracy = '{}prox-iters'.format(params['iter_prox'])
-    file_specifier = '{}_{}_{}-samples'.format(test_image_name,accuracy,params['iterations'])
+    regparam = '{:.0e}reg-param'.format(params['mu_tv'])
+    file_specifier = '{}_{}_{}_{}-samples'.format(test_image_name,accuracy,regparam,params['iterations'])
     results_file = result_root+'/'+file_specifier+'.npy'
     mmse_file = result_root+'/mmse_'+file_specifier+'.png'
     logstd_file = result_root+'/logstd_'+file_specifier+'.png'
@@ -127,7 +129,7 @@ def main():
         my_imshow(y,'noisy image',vmin=0,vmax=max_intensity,cbar=True)
         
         # regularization parameter
-        mu_tv = 0.2
+        mu_tv = params['mu_tv']
             
         ########## MAP computation ##########
         # deblur using ISTA on the composite functional f(x)+g(x). The splitting is 
@@ -148,10 +150,6 @@ def main():
 
         my_imshow(u,'MAP estimate',vmin=0,vmax=np.max(u),cbar=True)
         print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
-        
-        my_imsave(x,result_root+'/ground-truth.png',vmin=0,vmax=max_intensity)
-        my_imsave(y,result_root+'/noisy-obs.png',vmin=0,vmax=max_intensity)
-        my_imsave(u,result_root+'/map.png',vmin=0,vmax=max_intensity)
 
         ########## sample using inexact PLA ##########
         x0 = np.copy(u) # initialize chain at map to minimize burn-in
@@ -162,7 +160,7 @@ def main():
         n_samples = params['iterations']+burnin
         posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
         eff = params['efficient']
-        downsampling_scales = [2,4]
+        downsampling_scales = [2,4,8]
         
         ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff, downsampling_scales=downsampling_scales)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
@@ -184,20 +182,25 @@ def main():
         
         # show means
         my_imshow(ipla.mean, 'Sample Mean', vmin=0, vmax=max_intensity)
-        my_imsave(ipla.mean, mmse_file, vmin=0, vmax=max_intensity)
         for i,scale in enumerate(downsampling_scales):
             my_imshow(ipla.mean_scaled[i], 'Sample mean, downsampling = {}'.format(scale), vmin=0, vmax=max_intensity)
 
         # show and save standard deviations
         my_imshow(np.log10(ipla.std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
-        my_imsave(np.log10(ipla.std), logstd_file, vmin = np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
         for i,scale in enumerate(downsampling_scales):
             my_imshow(np.log10(ipla.std_scaled[i]), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
-            my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
         print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((ipla.mean-x)**2))))
         
+        # my_imsave(x,result_root+'/ground-truth.png',vmin=0,vmax=max_intensity)
+        # my_imsave(y,result_root+'/noisy-obs.png',vmin=0,vmax=max_intensity)
+        # my_imsave(u,result_root+'/map.png',vmin=0,vmax=max_intensity)
+        # my_imsave(ipla.mean, mmse_file, vmin=0, vmax=max_intensity)
+        # my_imsave(np.log10(ipla.std), logstd_file, vmin = np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
+        # for i,scale in enumerate(downsampling_scales):
+        #     my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
+
         # saving
         #np.save(results_file,(x,y,u,ipla.mean,ipla.std))
         
@@ -224,7 +227,7 @@ def main():
 #%% help function for calling from command line
 def print_help():
     print('<>'*39)
-    print('Run primal dual Langevin algorithm to generate samples from ROF posterior.')
+    print('Run Langevin algorithm to generate samples from Poisson data TV deblurring posterior.')
     print('<>'*39)
     print(' ')
     print('Options:')
@@ -233,6 +236,7 @@ def print_help():
     print('    -f (--testfile_path=): Path to test image file')
     print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
     print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
+    print('    -m (--mu_tv=): TV regularization parameter')
     print('    -p (--iter_prox=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
     print('    -s (--step=): \'large\' for 1/L or \'small\' for 0.5/L')
     print('    -d (--result_dir=): root directory for results. Default: ./results/deblur-wavelets')
@@ -241,9 +245,10 @@ def print_help():
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:ep:s:d:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:em:p:s:d:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficient_off","iter_prox=","step=","result_dir=","verbose"])
+                                    "efficient_off","mu_tv=","iter_prox=",
+                                    "step=","result_dir=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -258,6 +263,8 @@ if __name__ == '__main__':
             params['testfile_path'] = arg
         elif opt in ("-e","--efficient_off"):
             params['efficient'] = False
+        elif opt in ("-m", "--mu_tv"):
+            params['mu_tv'] = float(arg)
         elif opt in ("-p", "--iter_prox"):
             params['iter_prox'] = arg
         elif opt in ("-d","--result_dir"):
