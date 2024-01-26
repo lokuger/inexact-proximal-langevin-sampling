@@ -235,22 +235,20 @@ def print_help():
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
     print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
-    print('    -l (--log_epsilon=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
     print('    -m (--mu_tv=): TV regularization parameter')
     print('    -p (--iter_prox=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
-    print('    -s (--step=): \'large\' for 1/L or \'small\' for 0.5/L')
     print('    -d (--result_dir=): root directory for results. Default: ./results/deblur-wavelets')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:em:p:s:d:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:em:p:d:v",
                                    ["help","iterations=","testfile_path=",
                                     "efficient_off","mu_tv=","iter_prox=",
-                                    "step=","result_dir=","verbose"])
+                                    "result_dir=","verbose"])
     except getopt.GetoptError as E:
-        print(E)
+        print(E.msg)
         print_help()
         sys.exit(2)
     
