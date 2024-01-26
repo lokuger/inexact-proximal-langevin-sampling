@@ -249,7 +249,8 @@ if __name__ == '__main__':
                                    ["help","iterations=","testfile_path=",
                                     "efficient_off","mu_tv=","iter_prox=",
                                     "step=","result_dir=","verbose"])
-    except getopt.GetoptError:
+    except getopt.GetoptError as E:
+        print(E)
         print_help()
         sys.exit(2)
     
