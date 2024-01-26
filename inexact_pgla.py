@@ -2,6 +2,7 @@ import numpy as np
 from numpy.random import default_rng
 import sys
 import matplotlib.pyplot as plt
+from skimage.transform import downscale_local_mean
 
 class inexact_pgla():
     """
@@ -23,7 +24,7 @@ class inexact_pgla():
         - exact (False)         : if pd.g has an exact proximal operator, can choose True and run exact PGLA
         
     """
-    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, output_iterates=None, output_means=None, exact=False, stop_crit=None):
+    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, output_iterates=None, output_means=None, exact=False, stop_crit=None, downsampling_scales=None):
         self.n_iter = n_iter
         self.burnin = burnin
         self.iter = 0
@@ -43,10 +44,24 @@ class inexact_pgla():
         
         self.shape_x = x0.shape
         self.eff = efficient
-        if self.eff:        # save only running sum and sum of squares to compute mean & std estimates
+        if self.eff:
+            # sample at current step
             self.x = np.copy(x0)
+
+            # running sum and sum of squares to compute mean & std estimates
             self.sum = np.zeros(self.shape_x)
             self.sum_sq = np.zeros(self.shape_x)
+
+            # running sum and sum of squares of downsampled images. downsampling_scales contains the scaling factors
+            self.downsampling_scales = downsampling_scales
+            if self.downsampling_scales is not None:
+                sz = lambda s : tuple([int(np.ceil(n/s)) for n in self.x.shape])
+                self.sum_scaled = [np.zeros(sz(s)) for s in self.downsampling_scales]
+                self.sum_sq_scaled = [np.zeros(sz(s)) for s in self.downsampling_scales]
+                self.mean_scaled = [np.zeros(sz(s)) for s in self.downsampling_scales]
+                self.var_scaled = [np.zeros(sz(s)) for s in self.downsampling_scales]
+                self.std_scaled = [np.zeros(sz(s)) for s in self.downsampling_scales]
+
             # in efficient mode, there is the option to output a selected number of iterates or running means at given indices
             # self.I contains the indices of returned iterates
             if output_iterates is not None:
@@ -66,6 +81,7 @@ class inexact_pgla():
         else:
             self.x = np.zeros(self.shape_x+(self.n_iter+1,))
             self.x[...,0] = x0
+            self.stop_crit = stop_crit
         
         # iteration parameters
         self.f = pd.f
@@ -133,6 +149,10 @@ class inexact_pgla():
             self.mean = self.sum/N
             self.var = (self.sum_sq - (self.sum**2)/N)/(N-1) if N>1 else np.NAN
             self.std = np.sqrt(self.var)
+            for i,_ in enumerate(self.downsampling_scales):
+                self.mean_scaled[i] = self.sum_scaled[i]/N
+                self.var_scaled[i] = (self.sum_sq_scaled[i] - (self.sum_scaled[i]**2)/N)/(N-1) if N>1 else np.NAN
+                self.std_scaled[i] = np.sqrt(self.var_scaled[i])
         else:
             self.x = self.x[...,self.burnin+1:]
             self.mean = np.mean(self.x,axis=-1)
@@ -142,6 +162,7 @@ class inexact_pgla():
     def update(self):
         self.iter = self.iter + 1
         xi = self.rng.normal(size=self.shape_x)
+        x = self.x if self.eff else self.x[...,self.iter-1]
 
         # set step size
         if self.step_type == 'fxd':
@@ -159,6 +180,7 @@ class inexact_pgla():
                     tau *= gamma
                 else:                       # accept step size
                     self.tau_old,self.tau_all[self.iter-1] = tau,tau
+                    break
 
         # set inexactness level
         if not self.exact:
@@ -166,7 +188,6 @@ class inexact_pgla():
             iter_prox = self.iter_prox
 
         prox_g = (lambda u, tau: self.prox_g(u,tau)) if self.exact else (lambda u, tau: self.inexact_prox_g(u, tau, epsilon=epsilon_prox, max_iter=iter_prox))
-        x = self.x if self.eff else self.x[...,self.iter-1]
 
         # central update here:
         # note that res has variable number of elements, since the inexact prox routines should also output the number of iterations for diagnostics
@@ -180,8 +201,19 @@ class inexact_pgla():
         if self.eff:
             self.x = x_new
             if self.iter > self.burnin:
+                # running mean and sum of squares
                 self.sum = self.sum + self.x
                 self.sum_sq = self.sum_sq + self.x**2
+
+                # downsampled running sum and sum of squares
+                if self.downsampling_scales is not None:
+                    for i,scale in enumerate(self.downsampling_scales):
+                        if len(self.x.shape) == 2:
+                            xds = downscale_local_mean(self.x, scale)
+                            self.sum_scaled[i] = self.sum_scaled[i] + xds
+                            self.sum_sq_scaled[i] = self.sum_sq_scaled[i] + xds**2
+                        else:
+                            raise NotImplementedError('Downscaling only supported for images')
         else:
             self.x[...,self.iter] = x_new
         

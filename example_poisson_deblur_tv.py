@@ -19,14 +19,12 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 10000,
+    'iterations': 20000,
     'testfile_path': 'test-images/mri.tiff',
-    'blurtype': 'uniform',
-    'bandwidth': 5,
+    'bandwidth': 3,
     'mean_intensity': 10,
     'mean_bg':  0.1,
-    'log_epsilon': -2.0,
-    'iter_prox': np.Inf,
+    'iter_prox': 100,
     'efficient': True,
     'verbose': True,
     'result_root': './results/poisson-deblur-tv',
@@ -49,26 +47,7 @@ def blur_unif(n, b):
     a = lambda x : np.real(np.fft.ifft2(H_FFT * np.fft.fft2(x)))
     at = lambda x : np.real(np.fft.ifft2(HC_FFT * np.fft.fft2(x)))
     ata = lambda x : np.real(np.fft.ifft2(H_FFT * HC_FFT * np.fft.fft2(x)))
-    max_eigval = power_method(ata, n, 1e-4, int(1e3))
-    return a,at,max_eigval
-
-def blur_gauss(n, sigma):
-    """compute the blur operator a, its transpose a.t and the maximum eigenvalue 
-    of ata.
-    Carfeul, this assumes a quadratic n x n image, with n even
-    blur standard dev is assumed to be given in #pixels"""
-    t = np.arange(-n/2+1,n/2+1)
-    h = np.exp(-t**2/(2*sigma**2))
-    h = h / np.sum(h)
-    h = np.roll(h, -int(n/2)+1)
-    h = h[np.newaxis,:] * h[:,np.newaxis]
-    H_FFT = np.fft.fft2(h)
-    HC_FFT = np.conj(H_FFT)
-    a = lambda x : np.real(np.fft.ifft2(H_FFT * np.fft.fft2(x)))
-    at = lambda x : np.real(np.fft.ifft2(HC_FFT * np.fft.fft2(x)))
-    ata = lambda x : np.real(np.fft.ifft2(H_FFT * HC_FFT * np.fft.fft2(x)))
-    max_eigval = power_method(ata, n, 1e-4, int(1e3))
-    return a,at,max_eigval
+    return a,at
     
 def power_method(ata, n, tol, max_iter, verbose=False):
     """power method to compute the maximum eigenvalue of the linear op at*a"""
@@ -103,11 +82,12 @@ def main():
     result_root = params['result_root']
     
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
-    accuracy = 'log-epsilon{}'.format(params['log_epsilon'])
+    accuracy = '{}prox-iters'.format(params['iter_prox'])
     file_specifier = '{}_{}_{}-samples'.format(test_image_name,accuracy,params['iterations'])
     results_file = result_root+'/'+file_specifier+'.npy'
     mmse_file = result_root+'/mmse_'+file_specifier+'.png'
-    logstd_file = result_root+'/logstd_'+file_specifier+'.png' 
+    logstd_file = result_root+'/logstd_'+file_specifier+'.png'
+    logstd_scaled_file = lambda s: result_root+'/logstd_scale'+str(s)+'_'+file_specifier+'.png'
         
     #%% Ground truth
     # results_file = results_dir+'/result_images.npy'
@@ -128,33 +108,28 @@ def main():
         n = x.shape[0] # assume quadratic images
         tv = pot.total_variation_nonneg(n, n, scale=1)
         
-        #%% Forward model & corrupted data
+        ########## Forward model & noisy observation ##########
+        # blur operator
         blur_width = params['bandwidth']
-        if params['blurtype'] == 'gaussian':
-            a,at,max_ev_ata = blur_gauss(n,blur_width) 
-        elif params['blurtype'] == 'uniform':
-            a,at,max_ev_ata = blur_unif(n,blur_width)
-        elif params['blurtype'] == 'none':
-            a,at,max_ev_ata = lambda x : x, lambda x : x, 1
-        else:
-            print('Unknown blur type, aborting')
-            sys.exit()
+        a,at = blur_unif(n,blur_width)
         
+        # scale mean intensity of ground truth, background and data
         scale = params['mean_intensity']
         scale_bg = params['mean_bg']
         x *= scale
+        max_intensity = np.max(x)
 
-        y = rng.poisson(a(x)+scale_bg)
+        y = rng.poisson(np.maximum(0,a(x)))
         b = np.ones_like(y)*scale_bg
         
         # show ground truth and corrupted image
-        my_imshow(x,'ground truth',vmin=0,vmax=np.max(x),cbar=True)
-        my_imshow(y,'noisy image',vmin=0,vmax=np.max(y),cbar=True)
+        my_imshow(x,'ground truth',vmin=0,vmax=max_intensity,cbar=True)
+        my_imshow(y,'noisy image',vmin=0,vmax=max_intensity,cbar=True)
         
-        #%% regularization parameter
-        mu_tv = 0.01
+        # regularization parameter
+        mu_tv = 0.2
             
-        #%% MAP computation
+        ########## MAP computation ##########
         # deblur using ISTA on the composite functional f(x)+g(x). The splitting is 
         #       f(x) = KL(Ax+sigma,y) and g(x) = TV(x) + i_{R+}(x)
         # where KL is Kullback-Leibler, TV total variation and i_{R+} indicator of positive orthant.
@@ -173,48 +148,58 @@ def main():
 
         my_imshow(u,'MAP estimate',vmin=0,vmax=np.max(u),cbar=True)
         print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+        
+        my_imsave(x,result_root+'/ground-truth.png',vmin=0,vmax=max_intensity)
+        my_imsave(y,result_root+'/noisy-obs.png',vmin=0,vmax=max_intensity)
+        my_imsave(u,result_root+'/map.png',vmin=0,vmax=max_intensity)
 
+        ########## sample using inexact PLA ##########
+        x0 = np.copy(u) # initialize chain at map to minimize burn-in
+        tau = ('bt',1)
+        iter_prox = params['iter_prox']
+        epsilon_prox = None
+        burnin = 1000
+        n_samples = params['iterations']+burnin
+        posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
+        eff = params['efficient']
+        downsampling_scales = [2,4]
+        
+        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff, downsampling_scales=downsampling_scales)
+        if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
+        ipla.simulate(verbose=verb)
+        
+        ########## plots ##########
+        plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
+        plt.show()
+        plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        plt.show()
+        plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        plt.show()
+        plt.plot(np.arange(1,n_samples+1), ipla.dgap_vals)
+        plt.title('duality gap values')
+        plt.show()
+        
+        # show means
+        my_imshow(ipla.mean, 'Sample Mean', vmin=0, vmax=max_intensity)
+        my_imsave(ipla.mean, mmse_file, vmin=0, vmax=max_intensity)
+        for i,scale in enumerate(downsampling_scales):
+            my_imshow(ipla.mean_scaled[i], 'Sample mean, downsampling = {}'.format(scale), vmin=0, vmax=max_intensity)
 
-            
-        # #%% sample using inexact PLA
-        # x0 = np.copy(u) # np.zeros_like(x)
-        # tau = 1/L
-        # iter_prox = params['iter_prox']
-        # C = tau*mu_tv*tv(u)
-        # epsilon_prox = C * 10**params['log_epsilon'] if params['log_epsilon'] is not None else None
-        # burnin = 200
-        # n_samples = params['iterations']+burnin
-        # posterior = pds.l2_deblur_tv(n, n, a, at, max_ev_ata, y, noise_std=noise_std, mu_tv=mu_tv)
-        # eff = params['efficient']
+        # show and save standard deviations
+        my_imshow(np.log10(ipla.std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
+        my_imsave(np.log10(ipla.std), logstd_file, vmin = np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
+        for i,scale in enumerate(downsampling_scales):
+            my_imshow(np.log10(ipla.std_scaled[i]), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
+            my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
+        print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
+        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
+        print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((ipla.mean-x)**2))))
         
-        # #x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, exact=False
-        # ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff)
-        # if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
-        # ipla.simulate(verbose=verb)
-        
-        # #%% plots
-        # # diagnostic plot, making sure the sampler looks plausible
-        # plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
-        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
-        # plt.show()
-        # plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
-        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        # plt.show()
-        # plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
-        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        # plt.show()
-        # plt.plot(np.arange(1,n_samples+1), ipla.dgap_vals)
-        # plt.title('duality gap values')
-        # plt.show()
-        
-        # my_imshow(ipla.mean, 'Sample Mean, log10(epsilon)={}'.format(params['log_epsilon']))
-        # logstd = np.log10(ipla.std)
-        # my_imshow(logstd, 'Sample standard deviation (log10)', np.min(logstd), np.max(logstd))
-        # print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
-        # print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/n_samples))
-        
-        # #%% saving
-        # np.save(results_file,(x,y,u,ipla.mean,ipla.std))
+        # saving
+        #np.save(results_file,(x,y,u,ipla.mean,ipla.std))
         
     else:
         pass
@@ -256,10 +241,9 @@ def print_help():
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:el:p:s:d:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:ep:s:d:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficient_off","log_epsilon=",
-                                    "step=","result_dir=","verbose"])
+                                    "efficient_off","iter_prox=","step=","result_dir=","verbose"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -274,10 +258,8 @@ if __name__ == '__main__':
             params['testfile_path'] = arg
         elif opt in ("-e","--efficient_off"):
             params['efficient'] = False
-        elif opt in ("-l", "--log_epsilon"):
-            params['log_epsilon'] = float(arg)
         elif opt in ("-p", "--iter_prox"):
-            params['step'] = arg
+            params['iter_prox'] = arg
         elif opt in ("-d","--result_dir"):
             params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
