@@ -19,8 +19,8 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 20000,
-    'testfile_path': 'test-images/mri.tiff',
+    'iterations': 10000,
+    'testfile_path': 'test-images/phantom128.png',
     'bandwidth': 3,
     'mean_intensity': 10,
     'mean_bg':  0.1,
@@ -95,7 +95,7 @@ def main():
         rng = default_rng(1392)
         verb = params['verbose']
         try:
-            x = io.imread(params['testfile_path']).astype(float)[16,...]
+            x = io.imread(params['testfile_path']).astype(float)
         except FileNotFoundError:
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
