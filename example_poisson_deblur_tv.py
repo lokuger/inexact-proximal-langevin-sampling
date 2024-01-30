@@ -19,13 +19,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 1000,
+    'iterations': 1000000,
     'testfile_path': 'test-images/phantom256.png',
-    'mu_tv': 5e-1,
+    'mu_tv': 5e-01,
     'bandwidth': 5,
     'mean_intensity': 10,
     'mean_bg':  0.1,
-    'iter_prox': 100,
+    'iter_prox': 10,
     'efficient': True,
     'verbose': True,
     'result_root': './results/poisson-deblur-tv',
@@ -207,21 +207,25 @@ def main():
     else:
         pass
         #%% results were already computed, show images
-        # x,y,u,mn,std = np.load(results_file)
-        # logstd = np.log10(std)
+        x,y,u,mn,std,std_scaled = np.load(results_file,allow_pickle=True)
+        logstd = np.log10(std)
         # my_imsave(x, result_root+'/ground_truth.png')
         # my_imsave(y, result_root+'/noisy.png')
         # my_imsave(u, result_root+'/map.png')
         # my_imsave(mn, result_root+'/posterior_mean.png')
         # my_imsave(logstd, result_root+'/posterior_logstd.png',-0.68,-0.4)
         
-        # # my_imshow(x, 'ground truth')
-        # # my_imshow(y, 'blurred & noisy')
-        # # my_imshow(u, 'map estimate')
-        # my_imshow(mn, 'post. mean / mmse estimate')
-        # # my_imshow(logstd, 'posterior log std',-0.68,-0.4)
-        # print('MAP PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
-        # print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+        vmin = 0
+        vmax = np.max(x)
+        my_imshow(x, 'ground truth', vmin, vmax)
+        my_imshow(y, 'blurred & noisy', vmin, vmax)
+        my_imshow(u, 'map estimate', vmin, vmax)
+        my_imshow(mn, 'post. mean / mmse estimate', vmin, vmax)
+        my_imshow(logstd, 'posterior log std',np.min(logstd),np.max(logstd))
+        for s in std_scaled:
+            my_imshow(s, 'posterior log std at scale', np.min(s), np.max(s))
+        print('MAP PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+        print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         
 #%% help function for calling from command line
