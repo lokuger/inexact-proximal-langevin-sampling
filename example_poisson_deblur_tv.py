@@ -19,8 +19,8 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 100000,
-    'testfile_path': 'test-images/phantom256.png',
+    'iterations': 1000,
+    'testfile_path': 'test-images/phantom128.png',
     'mu_tv': 5e-01,
     'bandwidth': 5,
     'mean_intensity': 10,
@@ -94,9 +94,9 @@ def main():
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
     accuracy = '{}prox-iters'.format(params['iter_prox'])
     regparam = '{:.0e}reg-param'.format(params['mu_tv'])
-    steptype = 'btsteps' if params['step_type'] == 'bt' else 'fixstep'
+    steptype = 'btsteps' if params['step_type'] == 'bt' else 'fixsteps'
     file_specifier = '{}_{}_{}_{}_{}-samples'.format(test_image_name,accuracy,regparam,steptype,params['iterations'])
-    results_file = result_root+'/'+file_specifier+'.npy'
+    results_file = result_root+'/'+file_specifier+'.npz'
     cbar_file = result_root+'/'+file_specifier+'_colorbar'+'.png'
     mmse_file = result_root+'/mmse_'+file_specifier+'.png'
     logstd_file = result_root+'/logstd_'+file_specifier+'.png'
@@ -203,7 +203,9 @@ def main():
 
         # show and save standard deviations
         my_imshow(np.log10(ipla.std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
+        std_scaled = {}
         for i,scale in enumerate(downsampling_scales):
+            std_scaled['std_scale{}'.format(i)] = ipla.std_scaled[i]
             my_imshow(np.log10(ipla.std_scaled[i]), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
@@ -218,16 +220,17 @@ def main():
         #     my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
 
         # saving
-        np.save(results_file,(x,y,u,ipla.mean,ipla.std) + (() if downsampling_scales is None else (ipla.std_scaled,)))
+        np.savez(results_file,x=x,y=y,u=u,mn=ipla.mean,std=ipla.std,**std_scaled)
         
     else:
         pass
         #%% results were already computed, show images
-        x,y,u,mn,std,std_scaled = np.load(results_file,allow_pickle=True)
-        logstd = np.log10(std)
+        R = np.load(results_file)
+        logstd = np.log10(R['std'])
 
+        gt = R['x']
         vmin = 0
-        vmax = np.max(x)
+        vmax = np.max(gt)
 
         # my_imsave(x, result_root+'/ground_truth.png',vmin,vmax)
         # my_imsave(y, result_root+'/noisy.png',vmin,vmax)
@@ -235,15 +238,15 @@ def main():
         # my_imsave(mn, result_root+'/posterior_mean.png',vmin,vmax)
         # # my_imsave(logstd, result_root+'/posterior_logstd.png',-0.68,-0.4)
         
-        my_imshow(x, 'ground truth', vmin, vmax)
-        my_imshow(y, 'blurred & noisy', vmin, vmax)
-        my_imshow(u, 'map estimate', vmin, vmax)
-        my_imshow(mn, 'post. mean / mmse estimate', vmin, vmax)
+        my_imshow(gt, 'ground truth', vmin, vmax)
+        my_imshow(R['y'], 'blurred & noisy', vmin, vmax)
+        my_imshow(R['u'], 'map estimate', vmin, vmax)
+        my_imshow(R['mn'], 'post. mean / mmse estimate', vmin, vmax)
         my_imshow(logstd, 'posterior log std',np.min(logstd),np.max(logstd))
-        for s in std_scaled:
+        for s in [R[k] for k in R if k.startswith('std_scale')]:
             my_imshow(s, 'posterior log std at scale', np.min(s), np.max(s))
-        print('MAP PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
-        print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
+        print('MAP PSNR: {:.7f}'.format(10*np.log10(vmax**2/np.mean((R['u']-gt)**2))))
+        print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(vmax**2/np.mean((R['mn']-gt)**2))))
         
         
 #%% help function for calling from command line
