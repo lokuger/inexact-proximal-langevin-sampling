@@ -95,7 +95,7 @@ def main():
     accuracy = '{}prox-iters'.format(params['iter_prox'])
     regparam = '{:.0e}reg-param'.format(params['mu_tv'])
     steptype = 'btsteps' if params['step_type'] == 'bt' else 'fixstep'
-    file_specifier = '{}_{}_{}_{}-samples'.format(test_image_name,accuracy,regparam,steptype,params['iterations'])
+    file_specifier = '{}_{}_{}_{}_{}-samples'.format(test_image_name,accuracy,regparam,steptype,params['iterations'])
     results_file = result_root+'/'+file_specifier+'.npy'
     cbar_file = result_root+'/'+file_specifier+'_colorbar'+'.png'
     mmse_file = result_root+'/mmse_'+file_specifier+'.png'
@@ -218,7 +218,7 @@ def main():
         #     my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
 
         # saving
-        # np.save(results_file,(x,y,u,ipla.mean,ipla.std) + (() if downsampling_scales is None else (ipla.std_scaled,)))
+        np.save(results_file,(x,y,u,ipla.mean,ipla.std) + (() if downsampling_scales is None else (ipla.std_scaled,)))
         
     else:
         pass
