@@ -102,7 +102,6 @@ class inexact_pgla():
         
         # diagnostic checks
         self.logpi_vals = np.zeros((self.n_iter,))
-        self.dgap_vals = np.zeros((self.n_iter,))
         self.num_prox_its = np.zeros((self.n_iter,))
         self.num_prox_its_total = 0
     
