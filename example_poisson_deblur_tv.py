@@ -19,13 +19,14 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 1000000,
+    'iterations': 100000,
     'testfile_path': 'test-images/phantom256.png',
     'mu_tv': 5e-01,
     'bandwidth': 5,
     'mean_intensity': 10,
     'mean_bg':  0.1,
-    'iter_prox': 10,
+    'iter_prox': 5,
+    'step_type': 'bt',       # 'bt' or 'fixed'
     'efficient': True,
     'verbose': True,
     'result_root': './results/poisson-deblur-tv',
@@ -48,7 +49,8 @@ def blur_unif(n, b):
     a = lambda x : np.real(np.fft.ifft2(H_FFT * np.fft.fft2(x)))
     at = lambda x : np.real(np.fft.ifft2(HC_FFT * np.fft.fft2(x)))
     ata = lambda x : np.real(np.fft.ifft2(H_FFT * HC_FFT * np.fft.fft2(x)))
-    return a,at
+    max_ev_ata = power_method(ata, n, 1e-4, int(1e3))
+    return a,at,max_ev_ata
     
 def power_method(ata, n, tol, max_iter, verbose=False):
     """power method to compute the maximum eigenvalue of the linear op at*a"""
@@ -70,13 +72,20 @@ def my_imsave(im, filename, vmin=-0.02, vmax=1.02):
     im = np.clip((im-vmin)/(vmax-vmin) * 256,0,255).astype('uint8')
     io.imsave(filename, im)
     
-def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
+def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False, cbarfile=None):
     fig = plt.figure()
     plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
     q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
     plt.axis('off')
     if cbar: fig.colorbar(q)
     plt.show()
+
+    # draw a new figure and replot the colorbar there
+    if cbar:
+        fig,ax = plt.subplots(figsize=(2,3))
+        plt.colorbar(q,ax=ax)
+        ax.remove()
+        plt.savefig(cbarfile,bbox_inches='tight')
 
 #%% Main method - generate results directories
 def main():
@@ -85,8 +94,10 @@ def main():
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
     accuracy = '{}prox-iters'.format(params['iter_prox'])
     regparam = '{:.0e}reg-param'.format(params['mu_tv'])
-    file_specifier = '{}_{}_{}_{}-samples'.format(test_image_name,accuracy,regparam,params['iterations'])
+    steptype = 'btsteps' if params['step_type'] == 'bt' else 'fixstep'
+    file_specifier = '{}_{}_{}_{}-samples'.format(test_image_name,accuracy,regparam,steptype,params['iterations'])
     results_file = result_root+'/'+file_specifier+'.npy'
+    cbar_file = result_root+'/'+file_specifier+'_colorbar'+'.png'
     mmse_file = result_root+'/mmse_'+file_specifier+'.png'
     logstd_file = result_root+'/logstd_'+file_specifier+'.png'
     logstd_scaled_file = lambda s: result_root+'/logstd_scale'+str(s)+'_'+file_specifier+'.png'
@@ -113,7 +124,7 @@ def main():
         ########## Forward model & noisy observation ##########
         # blur operator
         blur_width = params['bandwidth']
-        a,at = blur_unif(n,blur_width)
+        a,at,max_ev_ata = blur_unif(n,blur_width)
         
         # scale mean intensity of ground truth, background and data
         scale = params['mean_intensity']
@@ -123,10 +134,11 @@ def main():
 
         y = rng.poisson(np.maximum(0,a(x)))
         b = np.ones_like(y)*scale_bg
+        L = max_ev_ata * np.max(y/(b**2))
         
         # show ground truth and corrupted image
-        my_imshow(x,'ground truth',vmin=0,vmax=max_intensity,cbar=True)
-        my_imshow(y,'noisy image',vmin=0,vmax=max_intensity,cbar=True)
+        my_imshow(x,'ground truth',vmin=0,vmax=max_intensity,cbar=False,cbarfile=cbar_file)
+        my_imshow(y,'noisy image',vmin=0,vmax=max_intensity)
         
         # regularization parameter
         mu_tv = params['mu_tv']
@@ -148,15 +160,15 @@ def main():
         u = opt_ista.compute(verbose=True)
         if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
 
-        my_imshow(u,'MAP estimate',vmin=0,vmax=np.max(u),cbar=True)
+        my_imshow(u,'MAP estimate',vmin=0,vmax=np.max(u))
         print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
 
         ########## sample using inexact PLA ##########
         x0 = np.copy(u) # initialize chain at map to minimize burn-in
-        tau = ('bt',1)
+        tau = ('bt',1) if params['step_type'] == 'bt' else ('fxd',1/L)
         iter_prox = params['iter_prox']
         epsilon_prox = None
-        burnin = 1000
+        burnin = 1000 if params['step_type'] == 'bt' else 10000
         n_samples = params['iterations']+burnin
         posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
         eff = params['efficient']
@@ -170,15 +182,19 @@ def main():
         plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
         plt.show()
-        plt.plot(np.arange(50+1,n_samples+1), ipla.logpi_vals[50:])
-        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        plt.show()
         plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         plt.show()
-        plt.plot(np.arange(1,n_samples+1), ipla.dgap_vals)
-        plt.title('duality gap values')
-        plt.show()
+        if params['step_type'] == 'bt':
+            tau_cum = np.cumsum(ipla.tau_all)
+            plt.plot(np.arange(n_samples),ipla.tau_all)
+            plt.title('Chosen step sizes')
+            plt.show()
+            print('Average chosen step size (using two-way backtracking) was {:.2e}.'.format(np.mean(ipla.tau_all)))
+            print('Naive estimate 1/L would have chosen {:.2e}'.format(1/L))
+            plt.plot(np.arange(n_samples),tau_cum)
+            plt.title('Cumulative steps')
+            plt.show()
         
         # show means
         my_imshow(ipla.mean, 'Sample Mean', vmin=0, vmax=max_intensity)
@@ -193,30 +209,32 @@ def main():
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
         print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((ipla.mean-x)**2))))
         
-        my_imsave(x,result_root+'/ground-truth.png',vmin=0,vmax=max_intensity)
-        my_imsave(y,result_root+'/noisy-obs.png',vmin=0,vmax=max_intensity)
-        my_imsave(u,result_root+'/map.png',vmin=0,vmax=max_intensity)
-        my_imsave(ipla.mean, mmse_file, vmin=0, vmax=max_intensity)
-        my_imsave(np.log10(ipla.std), logstd_file, vmin = np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
-        for i,scale in enumerate(downsampling_scales):
-            my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
+        # my_imsave(x,result_root+'/ground-truth.png',vmin=0,vmax=max_intensity)
+        # my_imsave(y,result_root+'/noisy-obs.png',vmin=0,vmax=max_intensity)
+        # my_imsave(u,result_root+'/map.png',vmin=0,vmax=max_intensity)
+        # my_imsave(ipla.mean, mmse_file, vmin=0, vmax=max_intensity)
+        # my_imsave(np.log10(ipla.std), logstd_file, vmin = np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
+        # for i,scale in enumerate(downsampling_scales):
+        #     my_imsave(np.log10(ipla.std_scaled[i]), logstd_scaled_file(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
 
         # saving
-        np.save(results_file,(x,y,u,ipla.mean,ipla.std) + (() if downsampling_scales is None else (ipla.std_scaled,)))
+        # np.save(results_file,(x,y,u,ipla.mean,ipla.std) + (() if downsampling_scales is None else (ipla.std_scaled,)))
         
     else:
         pass
         #%% results were already computed, show images
         x,y,u,mn,std,std_scaled = np.load(results_file,allow_pickle=True)
         logstd = np.log10(std)
-        # my_imsave(x, result_root+'/ground_truth.png')
-        # my_imsave(y, result_root+'/noisy.png')
-        # my_imsave(u, result_root+'/map.png')
-        # my_imsave(mn, result_root+'/posterior_mean.png')
-        # my_imsave(logstd, result_root+'/posterior_logstd.png',-0.68,-0.4)
-        
+
         vmin = 0
         vmax = np.max(x)
+
+        # my_imsave(x, result_root+'/ground_truth.png',vmin,vmax)
+        # my_imsave(y, result_root+'/noisy.png',vmin,vmax)
+        # # my_imsave(u, result_root+'/map.png')
+        # my_imsave(mn, result_root+'/posterior_mean.png',vmin,vmax)
+        # # my_imsave(logstd, result_root+'/posterior_logstd.png',-0.68,-0.4)
+        
         my_imshow(x, 'ground truth', vmin, vmax)
         my_imshow(y, 'blurred & noisy', vmin, vmax)
         my_imshow(u, 'map estimate', vmin, vmax)
@@ -241,16 +259,17 @@ def print_help():
     print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
     print('    -m (--mu_tv=): TV regularization parameter')
     print('    -p (--iter_prox=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
+    print('    -s (--step_type=): \'bt\' for backtracking, \'fixed\' for fixed step size (use estimate of Lipschitz constant when background is uniformly positive).')
     print('    -d (--result_dir=): root directory for results. Default: ./results/deblur-wavelets')
     print('    -v (--verbose): Verbose mode.')
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:em:p:d:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:em:p:s:d:v",
                                    ["help","iterations=","testfile_path=",
                                     "efficient_off","mu_tv=","iter_prox=",
-                                    "result_dir=","verbose"])
+                                    "step_type=","result_dir=","verbose"])
     except getopt.GetoptError as E:
         print(E.msg)
         print_help()
@@ -270,6 +289,12 @@ if __name__ == '__main__':
             params['mu_tv'] = float(arg)
         elif opt in ("-p", "--iter_prox"):
             params['iter_prox'] = int(arg)
+        elif opt in ("-s", "--step_type"):
+            if arg in ['bt','fixed']:
+                params['step_type'] = arg
+            else:
+                print('Unknown step type choice. Choose either \'bt\' or \'fixed\'')
+                sys.exit(2)
         elif opt in ("-d","--result_dir"):
             params['result_root'] = arg
         elif opt in ("-v", "--verbose"):
