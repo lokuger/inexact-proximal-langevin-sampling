@@ -19,9 +19,9 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': int(1e3),
+    'iterations': int(float('1e3')),
     'testfile_path': 'test-images/phantom256.png',
-    'mu_tv': 5e-01,
+    'mu_tv': 1e00,
     'bandwidth': 5,
     'mean_intensity': 1,
     'mean_bg':  0.01,
