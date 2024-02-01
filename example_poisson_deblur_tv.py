@@ -298,7 +298,7 @@ if __name__ == '__main__':
             print_help()
             sys.exit()
         elif opt in ("-i", "--iterations"):
-            params['iterations'] = int(arg)
+            params['iterations'] = int(float(arg))
         elif opt in ("-f", "--testfile_path"):
             params['testfile_path'] = arg
         elif opt in ("-e","--efficient_off"):
