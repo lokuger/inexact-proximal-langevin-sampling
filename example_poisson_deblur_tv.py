@@ -19,13 +19,13 @@ import distributions as pds
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': 1000,
-    'testfile_path': 'test-images/phantom128.png',
+    'iterations': int(1e3),
+    'testfile_path': 'test-images/phantom256.png',
     'mu_tv': 5e-01,
     'bandwidth': 5,
-    'mean_intensity': 10,
-    'mean_bg':  0.1,
-    'iter_prox': 5,
+    'mean_intensity': 1,
+    'mean_bg':  0.01,
+    'iter_prox': 10,
     'step_type': 'bt',       # 'bt' or 'fixed'
     'efficient': True,
     'verbose': True,
@@ -72,35 +72,42 @@ def my_imsave(im, filename, vmin=-0.02, vmax=1.02):
     im = np.clip((im-vmin)/(vmax-vmin) * 256,0,255).astype('uint8')
     io.imsave(filename, im)
     
-def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False, cbarfile=None):
+def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbarfile=None, cbarfigsize=None):
     fig = plt.figure()
     plt.subplots_adjust(left = 0, right = 1, top = 1, bottom = 0)
     q = plt.imshow(im, cmap='Greys_r', vmin=vmin, vmax=vmax)
     plt.axis('off')
-    if cbar: fig.colorbar(q)
     plt.show()
 
     # draw a new figure and replot the colorbar there
-    if cbar:
-        fig,ax = plt.subplots(figsize=(2,3))
-        plt.colorbar(q,ax=ax)
-        ax.remove()
-        plt.savefig(cbarfile,bbox_inches='tight')
+    if cbarfile is not None:
+        fig = plt.figure(figsize=cbarfigsize)
+        ax = fig.add_axes((0.05,0.05,0.2,0.9))
+        plt.colorbar(q,cax=ax)
+        plt.tick_params(axis='y', labelsize=9)
+        plt.tight_layout()
+        plt.savefig(cbarfile, bbox_inches='tight')
+        print(fig.get_size_inches())
+        #plt.show()
 
 #%% Main method - generate results directories
 def main():
     result_root = params['result_root']
     
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
-    accuracy = '{}prox-iters'.format(params['iter_prox'])
-    regparam = '{:.0e}reg-param'.format(params['mu_tv'])
+    meanintensity = '{:.0e}miv'.format(params['mean_intensity'])
+    accuracy = '{}proxiters'.format(params['iter_prox'])
+    regparam = '{:.0e}regparam'.format(params['mu_tv'])
     steptype = 'btsteps' if params['step_type'] == 'bt' else 'fixsteps'
-    file_specifier = '{}_{}_{}_{}_{}-samples'.format(test_image_name,accuracy,regparam,steptype,params['iterations'])
+    nsamples = '{:.0e}samples'.format(params['iterations'])
+    file_specifier = '{}_{}_{}_{}_{}_{}'.format(test_image_name,meanintensity,accuracy,regparam,steptype,nsamples)
     results_file = result_root+'/'+file_specifier+'.npz'
-    cbar_file = result_root+'/'+file_specifier+'_colorbar'+'.png'
+
+    # file names for result images
     mmse_file = result_root+'/mmse_'+file_specifier+'.png'
-    logstd_file = result_root+'/logstd_'+file_specifier+'.png'
-    logstd_scaled_file = lambda s: result_root+'/logstd_scale'+str(s)+'_'+file_specifier+'.png'
+    logstd_file = lambda s: result_root+'/logstd_scale{}_'.format(s)+file_specifier+'.png'
+    cbargt_file = result_root+'/'+test_image_name+'_colorbar.pdf'
+    cbarlogstd_file = lambda s: result_root+'/'+file_specifier+'_logstd_scale{}_colorbar.pdf'.format(s)
         
     #%% Ground truth
     # results_file = results_dir+'/result_images.npy'
@@ -137,7 +144,7 @@ def main():
         L = max_ev_ata * np.max(y/(b**2))
         
         # show ground truth and corrupted image
-        my_imshow(x,'ground truth',vmin=0,vmax=max_intensity,cbar=False,cbarfile=cbar_file)
+        my_imshow(x,'ground truth',vmin=0,vmax=max_intensity)
         my_imshow(y,'noisy image',vmin=0,vmax=max_intensity)
         
         # regularization parameter
@@ -205,7 +212,7 @@ def main():
         my_imshow(np.log10(ipla.std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
         std_scaled = {}
         for i,scale in enumerate(downsampling_scales):
-            std_scaled['std_scale{}'.format(i)] = ipla.std_scaled[i]
+            std_scaled['std_scale{}'.format(scale)] = ipla.std_scaled[i]
             my_imshow(np.log10(ipla.std_scaled[i]), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
@@ -228,23 +235,31 @@ def main():
         R = np.load(results_file)
         logstd = np.log10(R['std'])
 
-        gt = R['x']
-        vmin = 0
-        vmax = np.max(gt)
+        lw_inch = 444.5/74.27
 
-        # my_imsave(x, result_root+'/ground_truth.png',vmin,vmax)
-        # my_imsave(y, result_root+'/noisy.png',vmin,vmax)
-        # # my_imsave(u, result_root+'/map.png')
-        # my_imsave(mn, result_root+'/posterior_mean.png',vmin,vmax)
-        # # my_imsave(logstd, result_root+'/posterior_logstd.png',-0.68,-0.4)
+        gt = R['x']
+        vmax = np.max(gt)
+        vmin = -0.02*vmax
         
-        my_imshow(gt, 'ground truth', vmin, vmax)
-        my_imshow(R['y'], 'blurred & noisy', vmin, vmax)
-        my_imshow(R['u'], 'map estimate', vmin, vmax)
-        my_imshow(R['mn'], 'post. mean / mmse estimate', vmin, vmax)
-        my_imshow(logstd, 'posterior log std',np.min(logstd),np.max(logstd))
-        for s in [R[k] for k in R if k.startswith('std_scale')]:
-            my_imshow(s, 'posterior log std at scale', np.min(s), np.max(s))
+        # ground truth
+        #my_imshow(gt, 'ground truth', vmin, vmax, cbarfile=cbargt_file,cbarfigsize=(0.06*lw_inch,0.31*lw_inch))
+        my_imsave(gt, result_root+'/ground_truth.png', vmin, vmax)
+        # noisy image
+        #my_imshow(R['y'], 'blurred & noisy', vmin, vmax)
+        my_imsave(R['y'], result_root+'/noisy.png', vmin, vmax)
+        # map
+        #my_imshow(R['u'], 'map estimate', vmin, vmax)
+        my_imsave(R['u'], result_root+'/map.png', vmin, vmax)
+        # mean
+        #my_imshow(R['mn'], 'post. mean / mmse estimate', vmin, vmax)
+        my_imsave(R['mn'], mmse_file, vmin, vmax)
+        # log(std)
+        # my_imshow(logstd, 'posterior log std',np.min(logstd),np.max(logstd),cbarfile=cbarlogstd_file(0),cbarfigsize=(lw_inch*0.05,lw_inch*0.27))
+        my_imsave(logstd, logstd_file(0), np.min(logstd), np.max(logstd))
+        for s,scale in [(R[k],k[-1]) for k in R if k.startswith('std_scale')]:
+            logstd_scaled = np.log10(s)
+            # my_imshow(logstd_scaled, 'posterior log std at scale', np.min(logstd_scaled), np.max(logstd_scaled), cbarlogstd_file(2**(int(scale)+1)),cbarfigsize=(lw_inch*0.05,lw_inch*0.27))
+            my_imsave(logstd_scaled, logstd_file(2**(int(scale)+1)), np.min(logstd_scaled), np.max(logstd_scaled))
         print('MAP PSNR: {:.7f}'.format(10*np.log10(vmax**2/np.mean((R['u']-gt)**2))))
         print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(vmax**2/np.mean((R['mn']-gt)**2))))
         
