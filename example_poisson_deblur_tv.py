@@ -172,55 +172,55 @@ def main():
         print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
 
         # ########## sample using inexact PLA ##########
-        # x0 = np.copy(u) # initialize chain at map to minimize burn-in
-        # tau = ('bt',1) if params['step_type'] == 'bt' else ('fxd',1/L)
-        # iter_prox = params['iter_prox']
-        # epsilon_prox = None
-        # burnin = 1000 if params['step_type'] == 'bt' else 10000
-        # n_samples = params['iterations']+burnin
-        # posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
-        # eff = params['efficient']
-        # downsampling_scales = [2,4,8]
+        x0 = np.copy(u) # initialize chain at map to minimize burn-in
+        tau = ('bt',1) if params['step_type'] == 'bt' else ('fxd',1/L)
+        iter_prox = params['iter_prox']
+        epsilon_prox = None
+        burnin = 1000 if params['step_type'] == 'bt' else 10000
+        n_samples = params['iterations']+burnin
+        posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
+        eff = params['efficient']
+        downsampling_scales = [2,4,8]
         
-        # ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff, downsampling_scales=downsampling_scales)
-        # if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
-        # ipla.simulate(verbose=verb)
+        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff, downsampling_scales=downsampling_scales)
+        if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
+        ipla.simulate(verbose=verb)
         
-        # ########## plots ##########
-        # plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
-        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
-        # plt.show()
-        # plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
-        # plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
-        # plt.show()
-        # if params['step_type'] == 'bt':
-        #     tau_cum = np.cumsum(ipla.tau_all)
-        #     plt.plot(np.arange(n_samples),ipla.tau_all)
-        #     plt.title('Chosen step sizes')
-        #     plt.show()
-        #     print('Average chosen step size (using two-way backtracking) was {:.2e}.'.format(np.mean(ipla.tau_all)))
-        #     print('Naive estimate 1/L would have chosen {:.2e}'.format(1/L))
-        #     plt.plot(np.arange(n_samples),tau_cum)
-        #     plt.title('Cumulative steps')
-        #     plt.show()
+        ########## plots ##########
+        plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
+        plt.show()
+        plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
+        plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
+        plt.show()
+        if params['step_type'] == 'bt':
+            tau_cum = np.cumsum(ipla.tau_all)
+            plt.plot(np.arange(n_samples),ipla.tau_all)
+            plt.title('Chosen step sizes')
+            plt.show()
+            print('Average chosen step size (using two-way backtracking) was {:.2e}.'.format(np.mean(ipla.tau_all)))
+            print('Naive estimate 1/L would have chosen {:.2e}'.format(1/L))
+            plt.plot(np.arange(n_samples),tau_cum)
+            plt.title('Cumulative steps')
+            plt.show()
         
-        # # show means
-        # my_imshow(ipla.mean, 'Sample Mean', vmin=0, vmax=max_intensity)
-        # for i,scale in enumerate(downsampling_scales):
-        #     my_imshow(ipla.mean_scaled[i], 'Sample mean, downsampling = {}'.format(scale), vmin=0, vmax=max_intensity)
+        # show means
+        my_imshow(ipla.mean, 'Sample Mean', vmin=0, vmax=max_intensity)
+        for i,scale in enumerate(downsampling_scales):
+            my_imshow(ipla.mean_scaled[i], 'Sample mean, downsampling = {}'.format(scale), vmin=0, vmax=max_intensity)
 
-        # # show and save standard deviations
-        # my_imshow(np.log10(ipla.std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
-        # std_scaled = {}
-        # for i,scale in enumerate(downsampling_scales):
-        #     std_scaled['std_scale{}'.format(scale)] = ipla.std_scaled[i]
-        #     my_imshow(np.log10(ipla.std_scaled[i]), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
-        # print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
-        # print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
-        # print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((ipla.mean-x)**2))))
+        # show and save standard deviations
+        my_imshow(np.log10(ipla.std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
+        std_scaled = {}
+        for i,scale in enumerate(downsampling_scales):
+            std_scaled['std_scale{}'.format(scale)] = ipla.std_scaled[i]
+            my_imshow(np.log10(ipla.std_scaled[i]), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
+        print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
+        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
+        print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((ipla.mean-x)**2))))
         
-        # # saving
-        # np.savez(results_file,x=x,y=y,u=u,mn=ipla.mean,std=ipla.std,**std_scaled)
+        # saving
+        np.savez(results_file,x=x,y=y,u=u,mn=ipla.mean,std=ipla.std,**std_scaled)
     else:
         #%% results were already computed, show images
         R = np.load(results_file)
