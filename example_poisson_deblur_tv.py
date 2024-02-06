@@ -67,10 +67,11 @@ def power_method(ata, n, tol, max_iter, verbose=False):
             break
     return val
 
-def callback_ipla(s,rm,rmFT,rmDS,samplesFT=None):
+def callback_ipla(s,rm,rmFT,rmDS,log_pi_vals,tau_all,samplesFT=None):
+    x = s.x                                     # current sample
+    log_pi_vals[s.iter-1] = s.f(x) + s.g(x)       # log-density of current sample
+    tau_all[s.iter-1] = s.tau_old
     if s.iter > s.burnin:
-        x = s.x     # current sample
-
         # update running moments of samples
         rm.update(x)
 
@@ -78,6 +79,7 @@ def callback_ipla(s,rm,rmFT,rmDS,samplesFT=None):
         xFT = np.abs(np.fft.fft2(x))
         rmFT = rmFT.update(xFT)
 
+        # update running moments of downsampled images
         for scale in rmDS.keys():
             xds = transform.downscale_local_mean(x, scale)
             rmDS[scale].update(xds)
@@ -115,12 +117,7 @@ def main():
     result_root = params['result_root']
     
     test_image_name = params['testfile_path'].split('/')[-1].split('.')[0]
-    meanintensity = '{:.0e}miv'.format(params['mean_intensity'])
-    accuracy = '{}proxiters'.format(params['iter_prox'])
-    regparam = '{:.0e}regparam'.format(params['mu_tv'])
-    steptype = 'btsteps' if params['step_type'] == 'bt' else 'fixsteps'
-    nsamples = '{:.0e}samples'.format(params['iterations'])
-    file_specifier = '{}_{}_{}_{}_{}_{}'.format(test_image_name,meanintensity,accuracy,regparam,steptype,nsamples)
+    file_specifier = '{}_{:.0e}miv_{}proxiters_{:.0e}regparam_{}_{:.0e}samples'.format(test_image_name,params['mean_intensity'],params['iter_prox'],params['mu_tv'],('btsteps' if params['step_type'] == 'bt' else 'fixsteps'),params['iterations'])
     results_file = result_root+'/'+file_specifier+'.npz'
 
     # file names for result images
@@ -146,83 +143,85 @@ def main():
         x /= np.mean(x)
         n = x.shape[0]
         
-        ########## Forward model & noisy observation ##########
-        # blur operator
-        blur_width = params['bandwidth']
-        a,at,max_ev_ata = blur_unif(n,blur_width)
+        # ########## Forward model & noisy observation ##########
+        # # blur operator
+        # blur_width = params['bandwidth']
+        # a,at,max_ev_ata = blur_unif(n,blur_width)
         
-        # scale mean intensity of ground truth, background and data
-        scale = params['mean_intensity']
-        scale_bg = params['mean_bg']
-        x *= scale
-        max_intensity = np.max(x)
+        # # scale mean intensity of ground truth, background and data
+        # scale = params['mean_intensity']
+        # scale_bg = params['mean_bg']
+        # x *= scale
+        # max_intensity = np.max(x)
 
-        y = rng.poisson(np.maximum(0,a(x)))
-        b = np.ones_like(y)*scale_bg
-        L = max_ev_ata * np.max(y/(b**2))
+        # y = rng.poisson(np.maximum(0,a(x)))
+        # b = np.ones_like(y)*scale_bg
+        # L = max_ev_ata * np.max(y/(b**2))
         
-        # show ground truth and corrupted image
-        my_imshow(x,'ground truth',vmin=0,vmax=max_intensity)
-        my_imshow(y,'noisy image',vmin=0,vmax=max_intensity)
+        # # show ground truth and corrupted image
+        # my_imshow(x,'ground truth',vmin=0,vmax=max_intensity)
+        # my_imshow(y,'noisy image',vmin=0,vmax=max_intensity)
         
-        # regularization parameter
-        mu_tv = params['mu_tv']
+        # # regularization parameter
+        # mu_tv = params['mu_tv']
             
-        ########## MAP computation ##########
-        # deblur using ISTA on the composite functional f(x)+g(x). The splitting is 
-        #       f(x) = KL(Ax+sigma,y) and g(x) = TV(x) + i_{R+}(x)
-        # where KL is Kullback-Leibler, TV total variation and i_{R+} indicator of positive orthant.
-        # For step size choice, we use backtracking since the Lipschitz constant of gradient of KL
-        # is very heterogeneous in the admissible set
-        x0 = np.zeros(x.shape)
-        tau_ista = ('bt',1)
-        n_iter_ista = 5
-        f = pot.kl_divergence(y,b,a,at)
-        g = pot.total_variation_nonneg(n1=n,n2=n,scale=mu_tv)
-        opt_ista = ista(x0, tau_ista, n_iter_ista, f, g, efficient=True)
+        # ########## MAP computation ##########
+        # # deblur using ISTA on the composite functional f(x)+g(x). The splitting is 
+        # #       f(x) = KL(Ax+sigma,y) and g(x) = TV(x) + i_{R+}(x)
+        # # where KL is Kullback-Leibler, TV total variation and i_{R+} indicator of positive orthant.
+        # # For step size choice, we use backtracking since the Lipschitz constant of gradient of KL
+        # # is very heterogeneous in the admissible set
+        # x0 = np.zeros(x.shape)
+        # tau_ista = ('bt',1)
+        # n_iter_ista = 5
+        # f = pot.kl_divergence(y,b,a,at)
+        # g = pot.total_variation_nonneg(n1=n,n2=n,scale=mu_tv)
+        # opt_ista = ista(x0, tau_ista, n_iter_ista, f, g, efficient=True)
         
-        if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        u = opt_ista.compute(verbose=True)
-        if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
+        # if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
+        # u = opt_ista.compute(verbose=True)
+        # if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
 
-        my_imshow(u,'MAP estimate',vmin=0,vmax=np.max(u))
-        print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+        # my_imshow(u,'MAP estimate',vmin=0,vmax=np.max(u))
+        # print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
 
-        # ########## sample using inexact PLA ##########
-        x0 = np.copy(u) # initialize chain at map to minimize burn-in
-        tau = ('bt',1) if params['step_type'] == 'bt' else ('fxd',1/L)
-        iter_prox = params['iter_prox']
-        epsilon_prox = None
-        burnin = 250 if params['step_type'] == 'bt' else 10000
-        n_samples = params['iterations']+burnin
-        posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
+        # # ########## sample using inexact PLA ##########
+        # x0 = np.copy(u) # initialize chain at map to minimize burn-in
+        # tau = ('bt',1) if params['step_type'] == 'bt' else ('fxd',1/L)
+        # iter_prox = params['iter_prox']
+        # epsilon_prox = None
+        # burn_in = 250 if params['step_type'] == 'bt' else 10000
+        # n_samples = params['iterations']+burn_in
+        # posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
         
-        rm = running_moments.running_moments()          # running moments of samples
-        rmFT = running_moments.running_moments()        # running moments of samples' Fourier transforms
-        downsampling_scales = [2,4,8]
-        rmDS = {}                                       # running moments of downsampled samples
-        for scale in downsampling_scales:
-            rmDS[scale] = running_moments.running_moments()
+        # rm = running_moments.running_moments()          # running moments of samples
+        # rmFT = running_moments.running_moments()        # running moments of samples' Fourier transforms
+        # downsampling_scales = [2,4,8]
+        # rmDS = {}                                       # running moments of downsampled samples
+        # for scale in downsampling_scales:
+        #     rmDS[scale] = running_moments.running_moments()
         samplesFT = np.zeros(x.shape+(params['iterations'],))
-        callback = lambda x : callback_ipla(x,rm,rmFT,rmDS,samplesFT)
+        log_pi_vals = np.zeros((n_samples,))
+        tau_all = np.zeros((n_samples,))
+        callback = lambda x : callback_ipla(x,rm,rmFT,rmDS,log_pi_vals,tau_all,samplesFT)
         
-        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, callback=callback)
+        ipla = inexact_pgla(x0, n_samples, burn_in, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, callback=callback)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         
         ########## plots ##########
-        plt.plot(np.arange(1,n_samples+1), ipla.logpi_vals)
+        plt.plot(np.arange(1,n_samples+1), log_pi_vals)
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [All]')
         plt.show()
-        plt.plot(np.arange(burnin+1,n_samples+1), ipla.logpi_vals[burnin:])
+        plt.plot(np.arange(burn_in+1,n_samples+1), log_pi_vals[burn_in:])
         plt.title('- log(pi(X_n)) = F(K*X_n) + G(X_n) [after burn-in]')
         plt.show()
         if params['step_type'] == 'bt':
-            tau_cum = np.cumsum(ipla.tau_all)
-            plt.plot(np.arange(n_samples),ipla.tau_all)
+            tau_cum = np.cumsum(tau_all)
+            plt.plot(np.arange(n_samples),tau_all)
             plt.title('Chosen step sizes')
             plt.show()
-            print('Average chosen step size (using two-way backtracking) was {:.2e}.'.format(np.mean(ipla.tau_all)))
+            print('Average chosen step size (using two-way backtracking) was {:.2e}.'.format(np.mean(tau_all)))
             print('Naive estimate 1/L would have chosen {:.2e}'.format(1/L))
             plt.plot(np.arange(n_samples),tau_cum)
             plt.title('Cumulative steps')
@@ -243,7 +242,7 @@ def main():
             std_scaled['std_scale{}'.format(scale)] = std_sc
             my_imshow(np.log10(std_sc), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(std_sc)), vmax=np.log10(np.max(std_sc)))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
-        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
+        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burn_in)))
         print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # saving

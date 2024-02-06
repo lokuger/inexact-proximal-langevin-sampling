@@ -3,7 +3,7 @@ from numpy.random import default_rng
 import sys
 import matplotlib.pyplot as plt
 
-class inexact_pgla():
+class inexact_pla():
     """
     Instance of the inexact proximal Langevin algorithm
     __init__ parameters:
@@ -23,7 +23,7 @@ class inexact_pgla():
         - exact (False)         : if pd.g has an exact proximal operator, can choose True and run exact PGLA
         
     """
-    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, callback=None, output_iterates=None, output_means=None, exact=False, stop_crit=None):
+    def __init__(self, x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, callback=None, exact=False, stop_crit=None):
         self.n_iter = n_iter
         self.burnin = burnin
         self.iter = 0
@@ -39,7 +39,6 @@ class inexact_pgla():
                 self.step_fun = step_size[1]
             elif self.step_type == 'bt':
                 self.tau_old = step_size[1]
-                self.tau_all = np.zeros((n_iter,))
         
         self.shape_x = x0.shape
         self.x = np.copy(x0)
@@ -62,14 +61,10 @@ class inexact_pgla():
             self.epsilon_prox = (lambda n : epsilon_prox) if np.isscalar(epsilon_prox) else epsilon_prox
             self.iter_prox = iter_prox
         
-        # diagnostic checks
-        self.logpi_vals = np.zeros((self.n_iter,))
-        self.num_prox_its = np.zeros((self.n_iter,))
-        self.num_prox_its_total = 0
+        self.num_prox_its = 0
     
     def simulate(self, verbose=False):
         if verbose: sys.stdout.write('run inexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
-        i,j,stop = 0,0,False
         while not stop:
             # update step
             self.update()
@@ -96,7 +91,6 @@ class inexact_pgla():
     def update(self):
         self.iter = self.iter + 1
         xi = self.rng.normal(size=self.shape_x)
-        x = self.x
 
         # set step size
         if self.step_type == 'fxd':
@@ -113,7 +107,7 @@ class inexact_pgla():
                 if self.f(z) > fx + tau*m:  # armijo-goldstein cond.
                     tau *= gamma
                 else:                       # accept step size
-                    self.tau_old,self.tau_all[self.iter-1] = tau,tau
+                    self.tau_old = tau
                     break
 
         # set inexactness level
@@ -121,7 +115,7 @@ class inexact_pgla():
             epsilon_prox = self.epsilon_prox(self.iter) if self.epsilon_prox is not None else None
             iter_prox = self.iter_prox
 
-        prox_g = (lambda u, tau: self.prox_g(u,tau)) if self.exact else (lambda u, tau: self.inexact_prox_g(u, tau, epsilon=epsilon_prox, max_iter=iter_prox))
+        prox_g = lambda u, tau: (self.prox_g(u,tau) if self.exact else self.inexact_prox_g(u, tau, epsilon=epsilon_prox, max_iter=iter_prox))
 
         # central update here:
         # note that res has variable number of elements, since the inexact prox routines should also output the number of iterations for diagnostics
