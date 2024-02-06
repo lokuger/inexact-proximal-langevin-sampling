@@ -16,18 +16,18 @@ from inexact_pgla import inexact_pgla
 from ista import ista
 import potentials as pot
 import distributions as pds
+import running_moments
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': int(float('1e6')),
-    'testfile_path': 'test-images/phantom256.png',
-    'mu_tv': 2e00,
+    'iterations': int(float('1e2')),
+    'testfile_path': 'test-images/phantom128.png',
+    'mu_tv': 1e00,
     'bandwidth': 5,
-    'mean_intensity': 2,
+    'mean_intensity': 2,        # for MIV 2, mutv=1e00 has best mmse psnr on phantom. For MIV 10, mutv=0.5
     'mean_bg':  0.02,
     'iter_prox': 10,
     'step_type': 'bt',       # 'bt' or 'fixed'
-    'efficient': True,
     'verbose': True,
     'result_root': './results/poisson-deblur-tv',
     }
@@ -66,6 +66,25 @@ def power_method(ata, n, tol, max_iter, verbose=False):
         if rel_var < tol:
             break
     return val
+
+def callback_ipla(s,rm,rmFT,rmDS,samplesFT=None):
+    if s.iter > s.burnin:
+        x = s.x     # current sample
+
+        # update running moments of samples
+        rm.update(x)
+
+        # update running moments of samples' Fourier transforms
+        xFT = np.abs(np.fft.fft2(x))
+        rmFT = rmFT.update(xFT)
+
+        for scale in rmDS.keys():
+            xds = transform.downscale_local_mean(x, scale)
+            rmDS[scale].update(xds)
+
+        # if plotting ACF, store iterates' Fourier transforms
+        if samplesFT is not None:
+            samplesFT[...,s.iter-s.burnin-1] = xFT
 
 def my_imsave(im, filename, vmin=-0.02, vmax=1.02):
     im = np.clip(im,vmin,vmax)
@@ -125,9 +144,7 @@ def main():
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         x = x-np.min(x)
         x /= np.mean(x)
-
-        n = x.shape[0] # assume quadratic images
-        tv = pot.total_variation_nonneg(n, n, scale=1)
+        n = x.shape[0]
         
         ########## Forward model & noisy observation ##########
         # blur operator
@@ -159,7 +176,7 @@ def main():
         # is very heterogeneous in the admissible set
         x0 = np.zeros(x.shape)
         tau_ista = ('bt',1)
-        n_iter_ista = 500
+        n_iter_ista = 5
         f = pot.kl_divergence(y,b,a,at)
         g = pot.total_variation_nonneg(n1=n,n2=n,scale=mu_tv)
         opt_ista = ista(x0, tau_ista, n_iter_ista, f, g, efficient=True)
@@ -176,13 +193,20 @@ def main():
         tau = ('bt',1) if params['step_type'] == 'bt' else ('fxd',1/L)
         iter_prox = params['iter_prox']
         epsilon_prox = None
-        burnin = 1000 if params['step_type'] == 'bt' else 10000
+        burnin = 250 if params['step_type'] == 'bt' else 10000
         n_samples = params['iterations']+burnin
         posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
-        eff = params['efficient']
-        downsampling_scales = [2,4,8]
         
-        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff, downsampling_scales=downsampling_scales)
+        rm = running_moments.running_moments()          # running moments of samples
+        rmFT = running_moments.running_moments()        # running moments of samples' Fourier transforms
+        downsampling_scales = [2,4,8]
+        rmDS = {}                                       # running moments of downsampled samples
+        for scale in downsampling_scales:
+            rmDS[scale] = running_moments.running_moments()
+        samplesFT = np.zeros(x.shape+(params['iterations'],))
+        callback = lambda x : callback_ipla(x,rm,rmFT,rmDS,samplesFT)
+        
+        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, callback=callback)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         
@@ -205,22 +229,25 @@ def main():
             plt.show()
         
         # show means
-        my_imshow(ipla.mean, 'Sample Mean', vmin=0, vmax=max_intensity)
-        for i,scale in enumerate(downsampling_scales):
-            my_imshow(ipla.mean_scaled[i], 'Sample mean, downsampling = {}'.format(scale), vmin=0, vmax=max_intensity)
+        mn = rm.get_mean()
+        my_imshow(mn, 'Sample Mean', vmin=0, vmax=max_intensity)
+        for scale in downsampling_scales:
+            my_imshow(rmDS[scale].get_mean(), 'Sample mean, downsampling = {}'.format(scale), vmin=0, vmax=max_intensity)
 
         # show and save standard deviations
-        my_imshow(np.log10(ipla.std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(ipla.std)), vmax=np.log10(np.max(ipla.std)))
+        std = rm.get_std()
+        my_imshow(np.log10(std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(std)), vmax=np.log10(np.max(std)))
         std_scaled = {}
-        for i,scale in enumerate(downsampling_scales):
-            std_scaled['std_scale{}'.format(scale)] = ipla.std_scaled[i]
-            my_imshow(np.log10(ipla.std_scaled[i]), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(ipla.std_scaled[i])), vmax=np.log10(np.max(ipla.std_scaled[i])))
+        for scale in downsampling_scales:
+            std_sc = rmDS[scale].get_std()
+            std_scaled['std_scale{}'.format(scale)] = std_sc
+            my_imshow(np.log10(std_sc), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(std_sc)), vmax=np.log10(np.max(std_sc)))
         print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
         print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burnin)))
-        print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((ipla.mean-x)**2))))
+        print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # saving
-        np.savez(results_file,x=x,y=y,u=u,mn=ipla.mean,std=ipla.std,**std_scaled)
+        # np.savez(results_file,x=x,y=y,u=u,mn=mn,std=std,**std_scaled)
     else:
         #%% results were already computed, show images
         R = np.load(results_file)
@@ -265,7 +292,6 @@ def print_help():
     print('    -h (--help): Print help.')
     print('    -i (--iterations=): Number of iterations of the Markov chain')
     print('    -f (--testfile_path=): Path to test image file')
-    print('    -e (--efficient_off): Turn off storage-efficient mode, where we dont save samples but only compute a runnning mean and standard deviation during the algorithm. This can be used if we need the samples for some other reason (diagnostics etc). Then modify the code first')
     print('    -m (--mu_tv=): TV regularization parameter')
     print('    -p (--iter_prox=): log-10 of the accuracy parameter epsilon. The method will report the total number of iterations in the proximal computations for this epsilon = 10**log_epsilon in verbose mode')
     print('    -s (--step_type=): \'bt\' for backtracking, \'fixed\' for fixed step size (use estimate of Lipschitz constant when background is uniformly positive).')
@@ -275,9 +301,9 @@ def print_help():
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:em:p:s:d:v",
+        opts, args = getopt.getopt(sys.argv[1:],"hi:f:m:p:s:d:v",
                                    ["help","iterations=","testfile_path=",
-                                    "efficient_off","mu_tv=","iter_prox=",
+                                    "mu_tv=","iter_prox=",
                                     "step_type=","result_dir=","verbose"])
     except getopt.GetoptError as E:
         print(E.msg)
@@ -292,8 +318,6 @@ if __name__ == '__main__':
             params['iterations'] = int(float(arg))
         elif opt in ("-f", "--testfile_path"):
             params['testfile_path'] = arg
-        elif opt in ("-e","--efficient_off"):
-            params['efficient'] = False
         elif opt in ("-m", "--mu_tv"):
             params['mu_tv'] = float(arg)
         elif opt in ("-p", "--iter_prox"):
