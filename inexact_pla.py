@@ -9,7 +9,7 @@ class inexact_pla():
     __init__ parameters:
         - x0            : chain initialization, assumed to be an image, shape n1,n2
         - n_iter        : number of samples to be drawn
-        - burnin        : number of burnin samples to throw away
+        - burn_in       : number of burn_in samples to throw away
         - pd            : probability distribution, object of distributions
         Optional parameters
         - step-size             : has to be None (then we try to use 1/L if L is specified) or a tuple declaring the step size choice. step_size[0] must be one of 
@@ -19,7 +19,6 @@ class inexact_pla():
         - rng (default_rng())   : random number generator for reproducibility, init new one if None
         - epsilon_prox (1e-2)   : prox accuracy, either a scalar or a handle of n as epsilon(n). If epsilon == 0, equivalent to setting exact=True
         - iter_prox (np.Inf)    : number of iterations for prox, can be given as alternative to epsilon
-        - efficient (True)      : if True, do not save iterates but only current iterate, running mean and std of samples. If False, save all iterates
         - exact (False)         : if pd.g has an exact proximal operator, can choose True and run exact PGLA
         
     """
@@ -79,11 +78,8 @@ class inexact_pla():
                 sys.stdout.flush()
             stop = (self.iter == self.n_iter) if (self.stop_crit is None) else ((self.iter == self.n_iter) or (self.stop_crit(self)))
         
-        # adjust a few variables if stopping criterion was met before maximum number of iterations
         if self.iter < self.n_iter :
             self.n_iter = self.iter
-            self.logpi_vals = self.logpi_vals[:self.iter]
-            self.num_prox_its = self.num_prox_its[:self.iter]
             if verbose > 0: sys.stdout.write('\b'*5 + 'Stopping criterion satisfied at iteration {}. 100%\n'.format(self.iter)); sys.stdout.flush()
         else:
             if verbose > 0: sys.stdout.write('\b'*5 + '100%\n'); sys.stdout.flush()
@@ -123,11 +119,7 @@ class inexact_pla():
         res = prox_g(z+np.sqrt(2*tau)*xi, tau)
 
         # assign output correctly, compute log-density at sample
-        (self.x,num_prox_its) = (res,0) if self.exact else res
+        (self.x,self.num_prox_its) = (res,0) if self.exact else res
         self.dfx = self.df(self.x)
         self.logpi_vals[self.iter-1] = self.f(self.x) + self.g(self.x)
-        
-        self.num_prox_its[self.iter-1] = num_prox_its
-        if self.iter > self.burnin:
-            self.num_prox_its_total += num_prox_its
         

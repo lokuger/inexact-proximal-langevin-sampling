@@ -14,7 +14,7 @@ import sys, getopt, os
 from skimage import io, transform
 import pywt
 
-from inexact_pgla import inexact_pgla
+from inexact_pla import inexact_pla
 import potentials as pot
 import distributions as pds
 
@@ -171,10 +171,10 @@ def main():
         tau = step_factors[params['step']] * tau_max
         
         if params['log_epsilon'] == -np.Inf:
-            ipla = inexact_pgla(c0, n_samples, burnin, posterior, step_size=tau, rng=rng, efficient=True, exact=True)
+            ipla = inexact_pla(c0, n_samples, burnin, posterior, step_size=tau, rng=rng, efficient=True, exact=True)
         else:
             epsilon = 10**params['log_epsilon']
-            ipla = inexact_pgla(c0, n_samples, burnin, posterior, step_size=tau, epsilon_prox=epsilon, rng=rng, efficient=True)
+            ipla = inexact_pla(c0, n_samples, burnin, posterior, step_size=tau, epsilon_prox=epsilon, rng=rng, efficient=True)
         
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)

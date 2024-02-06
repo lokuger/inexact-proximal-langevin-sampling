@@ -1,3 +1,4 @@
+#%%
 # -*- coding: utf-8 -*-
 """
 Created on Wed Aug  2 11:40:45 2023
@@ -12,7 +13,7 @@ import sys, getopt, os
 #from time import time
 from skimage import io, transform
 
-from inexact_pgla import inexact_pgla
+from inexact_pla import inexact_pla
 # from sapg import sapg
 import potentials as pot
 import distributions as pds
@@ -22,7 +23,7 @@ params = {
     'iterations_max': 1000,
     'testfile_path': 'test-images/wheel.png',
     'noise_std': 0.2,
-    'log_epsilon': np.arange(-2,-4.9,-0.2),
+    'log_epsilon': np.arange(-2,-2.9,-0.2), # originally had np.arange(-2,-4.9,-0.2)
     'mmse_accuracy': 0.05,
     'step': 'large',
     'efficient': True,
@@ -31,7 +32,6 @@ params = {
     }
 
 #%% auxiliary functions
-#  change those
 def my_imsave(im, filename, vmin=-0.02, vmax=1.02):
     im = np.clip(im,vmin,vmax)
     im = np.clip((im-vmin)/(vmax-vmin) * 256,0,255).astype('uint8')
@@ -44,7 +44,7 @@ def my_imshow(im, label, vmin=-0.02, vmax=1.02, cbar=False):
     plt.axis('off')
     plt.title(label)
     if cbar: fig.colorbar(q)
-    plt.show()
+    plt.show(block=False)
     
     # draw a new figure and replot the colorbar there
     # fig,ax = plt.subplots(figsize=(2,3))
@@ -61,8 +61,8 @@ def main():
     file_specifier = '{}_{}'.format(test_image_name,accuracy)
     results_file = result_root+'/'+file_specifier+'.npy'
     
-    #%% Ground truth
     if True:#not os.path.exists(results_file):
+        ############# read in ground truth and generate observation #############
         rng = default_rng(6346534)
         verb = params['verbose']
         try:
@@ -70,18 +70,15 @@ def main():
         except FileNotFoundError:
             print('Provided test image did not exist under that path, aborting.')
             sys.exit()
-        # handle images that are too large or colored
         Nmax = 512
         if x.shape[0] > Nmax or x.shape[1] > Nmax: x = transform.resize(x, (Nmax,Nmax))
         x = x-np.min(x)
         x = x/np.max(x)
-        n = x.shape[0] # assume quadratic image, otherwise change some implementation details
+        n = x.shape[0] # assume quadratic image
         
         mu_tv = 8
         tv = pot.total_variation(n, n, scale=mu_tv)
-        # tv_groundtruth = tv(x)
         
-        #%% Forward model & corrupted data
         noise_std = params['noise_std']
         y = x + noise_std*rng.normal(size=x.shape)
         L = 1/noise_std**2
@@ -92,7 +89,7 @@ def main():
         my_imshow(x, 'ground truth')
         my_imshow(y, 'noisy image')
             
-        #%% MAP computation - L2-TV denoising (ROF)
+        ############# MAP computation - L2-TV denoising (ROF) #############
         if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
         C = mu_tv*tv(y)
         u,its = tv.inexact_prox(y, gamma=noise_std**2, epsilon=C*1e-4, max_iter=500, verbose=verb) # epsilon=1e2 corresponds to approx. 200 FISTA iterations
@@ -102,7 +99,7 @@ def main():
         my_imshow(u[314:378,444:508],'FISTA MAP details')
         print('MAP: mu_TV = {:.2f};\tPSNR: {:.4f}, #steps: {}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2)),its))
         
-        #%% sample using inexact PLA
+        ############# sample using inexact PLA #############
         with open(result_root+'/'+'{}_mmse_reference.npy'.format(test_image_name),'rb') as f:
             _,_,_,mmse_ref,_ = np.load(f)               # ground truth, noisy, map, sample mean and sample std
         my_imshow(mmse_ref,'MMSE estimate (One long IPGLA run w/ small epsilon)')
@@ -124,7 +121,7 @@ def main():
         for i,l in enumerate(params['log_epsilon']):
             epsilon = C*(10**l)
             
-            ipgla = inexact_pgla(x0, n_samples_max, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=True, stop_crit=stopcrit)
+            ipgla = inexact_pla(x0, n_samples_max, burnin, posterior, step_size=('fxd',tau), rng=rng, epsilon_prox=epsilon, efficient=True, stop_crit=stopcrit)
             if verb: sys.stdout.write('\#{}: epsilon = {:.2e} - '.format(i,epsilon)); sys.stdout.flush()
             ipgla.simulate(verbose=verb)
             
@@ -138,6 +135,7 @@ def main():
             # np.save(f,prox_its)
             # np.save(f,prox_its_per_sample)
     else:
+        pass
         print('Results file for this parameter already existed! Plotting the result:')
         with open(results_file,'rb') as f:
             epsilons = np.load(f)
@@ -180,29 +178,29 @@ def print_help():
     
 #%% gather parameters from shell and call main
 if __name__ == '__main__':
-    try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:f:ea:s:d:v",
-                                   ["help","iterations_max=","testfile_path=","efficient_off","mmse_accuracy=","result_dir=","verbose"])
-    except getopt.GetoptError as e:
-        print(e.msg)
-        print_help()
-        sys.exit(2)
+    # try:
+    #     opts, args = getopt.getopt(sys.argv[1:],"hi:f:ea:s:d:v",
+    #                                ["help","iterations_max=","testfile_path=","efficient_off","mmse_accuracy=","result_dir=","verbose"])
+    # except getopt.GetoptError as e:
+    #     print(e.msg)
+    #     print_help()
+    #     sys.exit(2)
     
-    for opt, arg in opts:
-        if opt in ("-h", "--help"):
-            print_help()
-            sys.exit()
-        elif opt in ("-i", "--iterations_max"):
-            params['iterations_max'] = int(arg)
-        elif opt in ("-f", "--testfile_path"):
-            params['testfile_path'] = arg
-        elif opt in ("-e","--efficient_off"):
-            params['efficient'] = False
-        elif opt in ("-a", "--mmse_accuracy"):
-            params['mmse_accuracy'] = float(arg)
-        elif opt in ("-d","--result_dir"):
-            params['result_root'] = arg
-        elif opt in ("-v", "--verbose"):
-            params['verbose'] = True
+    # for opt, arg in opts:
+    #     if opt in ("-h", "--help"):
+    #         print_help()
+    #         sys.exit()
+    #     elif opt in ("-i", "--iterations_max"):
+    #         params['iterations_max'] = int(arg)
+    #     elif opt in ("-f", "--testfile_path"):
+    #         params['testfile_path'] = arg
+    #     elif opt in ("-e","--efficient_off"):
+    #         params['efficient'] = False
+    #     elif opt in ("-a", "--mmse_accuracy"):
+    #         params['mmse_accuracy'] = float(arg)
+    #     elif opt in ("-d","--result_dir"):
+    #         params['result_root'] = arg
+    #     elif opt in ("-v", "--verbose"):
+    #         params['verbose'] = True
     main()
-    
+# %%

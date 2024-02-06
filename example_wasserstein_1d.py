@@ -11,7 +11,7 @@ from numpy.random import default_rng
 import sys, getopt, os
 import ot
 
-from inexact_pgla import inexact_pgla
+from inexact_pla import inexact_pla
 from pxmala import pxmala
 import distributions as pds
 
@@ -103,7 +103,7 @@ def main():
         n_prox_its = 0
         for ic in np.arange(n_chains):
             if verb: progress = int(ic/n_chains*100); sys.stdout.write('\b'*5 + '{:3d}% '.format(progress)); sys.stdout.flush()
-            sampler = inexact_pgla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon, efficient=True, output_iterates=K)
+            sampler = inexact_pla(x0_ipgla, Kmax, 0, posterior, step_size=tau_ipgla, rng=rng, epsilon_prox=epsilon, efficient=True, output_iterates=K)
             sampler.simulate(verbose=False)
             n_prox_its += sampler.num_prox_its_total
             samples_K[:,ic] = sampler.output_iterates

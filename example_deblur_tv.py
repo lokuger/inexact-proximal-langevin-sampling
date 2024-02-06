@@ -13,7 +13,7 @@ import sys, getopt, os
 #from time import time
 from skimage import io, transform
 
-from inexact_pgla import inexact_pgla
+from inexact_pla import inexact_pla
 #from sapg import sapg
 from pdhg import pdhg#, acc_pdhg
 import potentials as pot
@@ -219,7 +219,7 @@ def main():
         eff = params['efficient']
         
         #x0, n_iter, burnin, pd, step_size=None, rng=None, epsilon_prox=1e-2, iter_prox=np.Inf, efficient=False, exact=False
-        ipla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff)
+        ipla = inexact_pla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, efficient=eff)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         

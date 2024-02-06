@@ -13,7 +13,7 @@ import sys, getopt, os
 #from time import time
 from skimage import io, transform
 
-from inexact_pgla import inexact_pgla
+from inexact_pla import inexact_pla
 # from sapg import sapg
 import potentials as pot
 import distributions as pds
@@ -139,7 +139,7 @@ def main():
         output_means = np.reshape(np.reshape(np.array([1,2,5]),(1,-1))*np.reshape(10**np.arange(6),(-1,1)),(-1,))     # 1,2,5,10,20,50,... until max number of samples is reached
         output_means = output_means[output_means<=n_samples]
         
-        ipgla = inexact_pgla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, output_means=output_means)
+        ipgla = inexact_pla(x0, n_samples, burnin, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon, efficient=eff, output_means=output_means)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipgla.simulate(verbose=verb)
         

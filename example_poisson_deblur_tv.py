@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import sys, getopt, os
 from skimage import io, transform
 
-from inexact_pgla import inexact_pgla
+from inexact_pla import inexact_pla
 from ista import ista
 import potentials as pot
 import distributions as pds
@@ -143,63 +143,63 @@ def main():
         x /= np.mean(x)
         n = x.shape[0]
         
-        # ########## Forward model & noisy observation ##########
-        # # blur operator
-        # blur_width = params['bandwidth']
-        # a,at,max_ev_ata = blur_unif(n,blur_width)
+        ########## Forward model & noisy observation ##########
+        # blur operator
+        blur_width = params['bandwidth']
+        a,at,max_ev_ata = blur_unif(n,blur_width)
         
-        # # scale mean intensity of ground truth, background and data
-        # scale = params['mean_intensity']
-        # scale_bg = params['mean_bg']
-        # x *= scale
-        # max_intensity = np.max(x)
+        # scale mean intensity of ground truth, background and data
+        scale = params['mean_intensity']
+        scale_bg = params['mean_bg']
+        x *= scale
+        max_intensity = np.max(x)
 
-        # y = rng.poisson(np.maximum(0,a(x)))
-        # b = np.ones_like(y)*scale_bg
-        # L = max_ev_ata * np.max(y/(b**2))
+        y = rng.poisson(np.maximum(0,a(x)))
+        b = np.ones_like(y)*scale_bg
+        L = max_ev_ata * np.max(y/(b**2))
         
-        # # show ground truth and corrupted image
-        # my_imshow(x,'ground truth',vmin=0,vmax=max_intensity)
-        # my_imshow(y,'noisy image',vmin=0,vmax=max_intensity)
+        # show ground truth and corrupted image
+        my_imshow(x,'ground truth',vmin=0,vmax=max_intensity)
+        my_imshow(y,'noisy image',vmin=0,vmax=max_intensity)
         
-        # # regularization parameter
-        # mu_tv = params['mu_tv']
+        # regularization parameter
+        mu_tv = params['mu_tv']
             
-        # ########## MAP computation ##########
-        # # deblur using ISTA on the composite functional f(x)+g(x). The splitting is 
-        # #       f(x) = KL(Ax+sigma,y) and g(x) = TV(x) + i_{R+}(x)
-        # # where KL is Kullback-Leibler, TV total variation and i_{R+} indicator of positive orthant.
-        # # For step size choice, we use backtracking since the Lipschitz constant of gradient of KL
-        # # is very heterogeneous in the admissible set
-        # x0 = np.zeros(x.shape)
-        # tau_ista = ('bt',1)
-        # n_iter_ista = 5
-        # f = pot.kl_divergence(y,b,a,at)
-        # g = pot.total_variation_nonneg(n1=n,n2=n,scale=mu_tv)
-        # opt_ista = ista(x0, tau_ista, n_iter_ista, f, g, efficient=True)
+        ########## MAP computation ##########
+        # deblur using ISTA on the composite functional f(x)+g(x). The splitting is 
+        #       f(x) = KL(Ax+sigma,y) and g(x) = TV(x) + i_{R+}(x)
+        # where KL is Kullback-Leibler, TV total variation and i_{R+} indicator of positive orthant.
+        # For step size choice, we use backtracking since the Lipschitz constant of gradient of KL
+        # is very heterogeneous in the admissible set
+        x0 = np.zeros(x.shape)
+        tau_ista = ('bt',1)
+        n_iter_ista = 5
+        f = pot.kl_divergence(y,b,a,at)
+        g = pot.total_variation_nonneg(n1=n,n2=n,scale=mu_tv)
+        opt_ista = ista(x0, tau_ista, n_iter_ista, f, g, efficient=True)
         
-        # if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
-        # u = opt_ista.compute(verbose=True)
-        # if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
+        if verb: sys.stdout.write('Compute MAP - '); sys.stdout.flush()
+        u = opt_ista.compute(verbose=True)
+        if verb: sys.stdout.write('Done.\n'); sys.stdout.flush()
 
-        # my_imshow(u,'MAP estimate',vmin=0,vmax=np.max(u))
-        # print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
+        my_imshow(u,'MAP estimate',vmin=0,vmax=np.max(u))
+        print('MAP: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((u-x)**2))))
 
-        # # ########## sample using inexact PLA ##########
-        # x0 = np.copy(u) # initialize chain at map to minimize burn-in
-        # tau = ('bt',1) if params['step_type'] == 'bt' else ('fxd',1/L)
-        # iter_prox = params['iter_prox']
-        # epsilon_prox = None
-        # burn_in = 250 if params['step_type'] == 'bt' else 10000
-        # n_samples = params['iterations']+burn_in
-        # posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
+        # ########## sample using inexact PLA ##########
+        x0 = np.copy(u) # initialize chain at map to minimize burn-in
+        tau = ('bt',1) if params['step_type'] == 'bt' else ('fxd',1/L)
+        iter_prox = params['iter_prox']
+        epsilon_prox = None
+        burn_in = 250 if params['step_type'] == 'bt' else 10000
+        n_samples = params['iterations']+burn_in
+        posterior = pds.kl_deblur_tvnonneg_prior(n,n,a,at,y,b,mu_tv)
         
-        # rm = running_moments.running_moments()          # running moments of samples
-        # rmFT = running_moments.running_moments()        # running moments of samples' Fourier transforms
-        # downsampling_scales = [2,4,8]
-        # rmDS = {}                                       # running moments of downsampled samples
-        # for scale in downsampling_scales:
-        #     rmDS[scale] = running_moments.running_moments()
+        rm = running_moments.running_moments()          # running moments of samples
+        rmFT = running_moments.running_moments()        # running moments of samples' Fourier transforms
+        downsampling_scales = [2,4,8]
+        rmDS = {}                                       # running moments of downsampled samples
+        for scale in downsampling_scales:
+            rmDS[scale] = running_moments.running_moments()
         samplesFT = np.zeros(x.shape+(params['iterations'],))
         log_pi_vals = np.zeros((n_samples,))
         tau_all = np.zeros((n_samples,))
