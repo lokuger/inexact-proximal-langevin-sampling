@@ -205,7 +205,7 @@ def main():
         tau_all = np.zeros((n_samples,))
         callback = lambda x : callback_ipla(x,rm,rmFT,rmDS,log_pi_vals,tau_all,samplesFT)
         
-        ipla = inexact_pgla(x0, n_samples, burn_in, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, callback=callback)
+        ipla = inexact_pla(x0, n_samples, burn_in, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, callback=callback)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
         
