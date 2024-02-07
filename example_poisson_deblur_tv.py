@@ -70,7 +70,8 @@ def power_method(ata, n, tol, max_iter, verbose=False):
 def callback_ipla(s,rm,rmFT,rmDS,log_pi_vals,tau_all,samplesFT=None):
     x = s.x                                     # current sample
     log_pi_vals[s.iter-1] = s.f(x) + s.g(x)       # log-density of current sample
-    tau_all[s.iter-1] = s.tau_old
+    if s.step_type == 'bt':
+        tau_all[s.iter-1] = s.tau_old 
     if s.iter > s.burnin:
         # update running moments of samples
         rm.update(x)
