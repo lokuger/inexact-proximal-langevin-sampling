@@ -221,7 +221,7 @@ def main():
         acf_fast = autocorr(c_fast)
         c_slow = samplesFT[*np.unravel_index(np.argmax(post_cov),shape=post_cov.shape),:]
         acf_slow = autocorr(c_slow)
-        c_med = samplesFT[*np.unravel_index(np.argsort(post_cov.flatten())[3*3//2],shape=post_cov.shape),:]
+        c_med = samplesFT[*np.unravel_index(np.argsort(post_cov.flatten())[(n*n)//2],shape=post_cov.shape),:]
         acf_med = autocorr(c_med)
         
         ########## plots ##########
