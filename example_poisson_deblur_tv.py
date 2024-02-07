@@ -20,14 +20,14 @@ import running_moments
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': int(float('1e3')),
-    'testfile_path': 'test-images/phantom128.png',
+    'iterations': int(float('1e5')),
+    'testfile_path': 'test-images/phantom256.png',
     'mu_tv': 1e00,
     'bandwidth': 5,
     'mean_intensity': 2,        # for MIV 2, mutv=1e00 has best mmse psnr on phantom. For MIV 10, mutv=0.5
     'mean_bg':  0.02,
     'iter_prox': 10,
-    'step_type': 'bt',       # 'bt' or 'fixed'
+    'step_type': 'fixed',       # 'bt' or 'fixed'
     'verbose': True,
     'result_root': './results/poisson-deblur-tv',
     }
@@ -277,29 +277,35 @@ def main():
         vmin = -0.02*vmax
         
         # ground truth
-        my_imshow(gt, 'ground truth', vmin, vmax, cbarfile=cbargt_file,cbarfigsize=(0.5*0.6*6.15, 0.5*3.1*6.15))
-        my_imsave(gt, result_root+'/ground_truth.png', vmin, vmax)
+        # my_imshow(gt, 'ground truth', vmin, vmax, cbarfile=cbargt_file,cbarfigsize=(0.5*0.6*6.15, 0.5*3.1*6.15))
+        # my_imsave(gt, result_root+'/ground_truth.png', vmin, vmax)
         # noisy image
-        my_imshow(R['y'], 'blurred & noisy', vmin, vmax)
-        my_imsave(R['y'], result_root+'/noisy.png', vmin, vmax)
+        # my_imshow(R['y'], 'blurred & noisy', vmin, vmax)
+        # my_imsave(R['y'], result_root+'/noisy.png', vmin, vmax)
         # map
-        my_imshow(R['u'], 'map estimate', vmin, vmax)
-        my_imsave(R['u'], result_root+'/map.png', vmin, vmax)
+        # my_imshow(R['u'], 'map estimate', vmin, vmax)
+        # my_imsave(R['u'], result_root+'/map.png', vmin, vmax)
         # mean
-        my_imshow(R['mn'], 'post. mean / mmse estimate', vmin, vmax)
-        my_imsave(R['mn'], mmse_file, vmin, vmax)
+        # my_imshow(R['mn'], 'post. mean / mmse estimate', vmin, vmax)
+        # my_imsave(R['mn'], mmse_file, vmin, vmax)
         # log(std)
         wmin, wmax = np.min(logstd), np.max(logstd)
-        my_imshow(logstd, 'posterior log std',wmin,wmax,cbarfile=cbarlogstd_file(0),cbarfigsize=(0.5*0.4*6.15, 0.5*2.1*6.15), cbarticks=np.arange(np.ceil(wmin),np.ceil(wmax)))
-        my_imsave(logstd, logstd_file(0), np.min(logstd), np.max(logstd))
+        # my_imshow(logstd, 'posterior log std',wmin,wmax,cbarfile=cbarlogstd_file(0),cbarfigsize=(0.5*0.4*6.15, 0.5*2.1*6.15), cbarticks=np.arange(np.ceil(wmin),np.ceil(wmax)))
+        # my_imsave(logstd, logstd_file(0), np.min(logstd), np.max(logstd))
         for s,scale in [(R[k],k[-1]) for k in R if k.startswith('std_scale')]:
             logstd_scaled = np.log(s)
             wmin, wmax = np.min(logstd_scaled), np.max(logstd_scaled)
-            my_imshow(logstd_scaled, 'posterior log std at scale', wmin, wmax, cbarlogstd_file(int(scale)),cbarfigsize=(0.5*0.4*6.15, 0.5*2.1*6.15),cbarticks=np.arange(np.ceil(wmin),np.ceil(wmax)))
-            my_imsave(logstd_scaled, logstd_file(int(scale)), np.min(logstd_scaled), np.max(logstd_scaled))
+            # my_imshow(logstd_scaled, 'posterior log std at scale', wmin, wmax, cbarlogstd_file(int(scale)),cbarfigsize=(0.5*0.4*6.15, 0.5*2.1*6.15),cbarticks=np.arange(np.ceil(wmin),np.ceil(wmax)))
+            # my_imsave(logstd_scaled, logstd_file(int(scale)), np.min(logstd_scaled), np.max(logstd_scaled))
         print('MAP PSNR: {:.7f}'.format(10*np.log10(vmax**2/np.mean((R['u']-gt)**2))))
         print('Posterior mean PSNR: {:.7f}'.format(10*np.log10(vmax**2/np.mean((R['mn']-gt)**2))))
         
+        # acf plots
+        plt.plot(np.arange(101),R['acf_fast'],'-xr')
+        plt.plot(np.arange(101),R['acf_med'],'-+b')
+        plt.plot(np.arange(101),R['acf_slow'],'-ok')
+        plt.title('Autocorrelation functions')
+        plt.show()
         
 #%% help function for calling from command line
 def print_help():
