@@ -20,7 +20,7 @@ import running_moments
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': int(float('1e4')),
+    'iterations': int(float('1e3')),
     'testfile_path': 'test-images/phantom128.png',
     'mu_tv': 1e00,
     'bandwidth': 5,
@@ -216,12 +216,13 @@ def main():
         ########## extract fastest, median and slowest component of MC ##########
         # this assumes posterior covariance has same eigenvectors as the blur op.
         # i.e. Fourier modes, hence FT variance matrix is post. cov.
+        samplesFT = np.reshape(samplesFT,(np.prod(x.shape),params['iterations']))
         post_cov = rmFT.get_var()
-        c_fast = samplesFT[*np.unravel_index(np.argmin(post_cov),shape=post_cov.shape),:]
+        c_fast = samplesFT[np.argmin(post_cov),:]
         acf_fast = autocorr(c_fast)
-        c_slow = samplesFT[*np.unravel_index(np.argmax(post_cov),shape=post_cov.shape),:]
+        c_slow = samplesFT[np.argmax(post_cov),:]
         acf_slow = autocorr(c_slow)
-        c_med = samplesFT[*np.unravel_index(np.argsort(post_cov.flatten())[(n*n)//2],shape=post_cov.shape),:]
+        c_med = samplesFT[np.argsort(post_cov.flatten())[np.prod(x.shape)//2],:]
         acf_med = autocorr(c_med)
         
         ########## plots ##########
