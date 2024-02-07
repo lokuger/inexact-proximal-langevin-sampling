@@ -20,7 +20,7 @@ import running_moments
 
 #%% initial parameters: test image, computation settings etc.
 params = {
-    'iterations': int(float('1e2')),
+    'iterations': int(float('1e4')),
     'testfile_path': 'test-images/phantom128.png',
     'mu_tv': 1e00,
     'bandwidth': 5,
@@ -87,6 +87,10 @@ def callback_ipla(s,rm,rmFT,rmDS,log_pi_vals,tau_all,samplesFT=None):
         # if plotting ACF, store iterates' Fourier transforms
         if samplesFT is not None:
             samplesFT[...,s.iter-s.burnin-1] = xFT
+
+def autocorr(x,lags=range(101)):
+    '''numpy.corrcoef, partial'''
+    return np.array([1. if l==0 else np.corrcoef(x[l:],x[:-l])[0][1] for l in lags])
 
 def my_imsave(im, filename, vmin=-0.02, vmax=1.02):
     im = np.clip(im,vmin,vmax)
@@ -208,6 +212,17 @@ def main():
         ipla = inexact_pla(x0, n_samples, burn_in, posterior, step_size=tau, rng=rng, epsilon_prox=epsilon_prox, iter_prox=iter_prox, callback=callback)
         if verb: sys.stdout.write('Sample from posterior - '); sys.stdout.flush()
         ipla.simulate(verbose=verb)
+
+        ########## extract fastest, median and slowest component of MC ##########
+        # this assumes posterior covariance has same eigenvectors as the blur op.
+        # i.e. Fourier modes, hence FT variance matrix is post. cov.
+        post_cov = rmFT.get_var()
+        c_fast = samplesFT[*np.unravel_index(np.argmin(post_cov),shape=post_cov.shape),:]
+        acf_fast = autocorr(c_fast)
+        c_slow = samplesFT[*np.unravel_index(np.argmax(post_cov),shape=post_cov.shape),:]
+        acf_slow = autocorr(c_slow)
+        c_med = samplesFT[*np.unravel_index(np.argsort(post_cov.flatten())[3*3//2],shape=post_cov.shape),:]
+        acf_med = autocorr(c_med)
         
         ########## plots ##########
         plt.plot(np.arange(1,n_samples+1), log_pi_vals)
@@ -226,14 +241,19 @@ def main():
             plt.plot(np.arange(n_samples),tau_cum)
             plt.title('Cumulative steps')
             plt.show()
-        
-        # show means
+        plt.plot(np.arange(101),acf_fast,'-xr')
+        plt.plot(np.arange(101),acf_med,'-+b')
+        plt.plot(np.arange(101),acf_slow,'-ok')
+        plt.title('Autocorrelation functions')
+        plt.show()
+
+        # show mean
         mn = rm.get_mean()
         my_imshow(mn, 'Sample Mean', vmin=0, vmax=max_intensity)
         for scale in downsampling_scales:
             my_imshow(rmDS[scale].get_mean(), 'Sample mean, downsampling = {}'.format(scale), vmin=0, vmax=max_intensity)
 
-        # show and save standard deviations
+        # show standard deviation
         std = rm.get_std()
         my_imshow(np.log10(std), 'Sample standard deviation (log10)', vmin=np.log10(np.min(std)), vmax=np.log10(np.max(std)))
         std_scaled = {}
@@ -241,12 +261,10 @@ def main():
             std_sc = rmDS[scale].get_std()
             std_scaled['std_scale{}'.format(scale)] = std_sc
             my_imshow(np.log10(std_sc), 'Sample mean, downsampling = {}'.format(scale), vmin=np.log10(np.min(std_sc)), vmax=np.log10(np.max(std_sc)))
-        print('Total no. iterations to compute proximal mappings: {}'.format(ipla.num_prox_its_total))
-        print('No. iterations per sampling step: {:.1f}'.format(ipla.num_prox_its_total/(n_samples-burn_in)))
         print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # saving
-        # np.savez(results_file,x=x,y=y,u=u,mn=mn,std=std,**std_scaled)
+        np.savez(results_file,x=x,y=y,u=u,mn=mn,std=std,**std_scaled,c_fast=c_fast,acf_fast=acf_fast,c_slow=c_slow,acf_slow=acf_slow,c_med=c_med,acf_med=acf_med)
     else:
         #%% results were already computed, show images
         R = np.load(results_file)

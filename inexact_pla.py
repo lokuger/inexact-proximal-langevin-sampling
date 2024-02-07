@@ -49,7 +49,7 @@ class inexact_pla():
         # iteration parameters
         self.f = pd.f
         self.df = pd.f.grad
-        self.dfx = self.df(self.x) if self.eff else self.df(self.x[...,0])
+        self.dfx = self.df(self.x)
         self.g = pd.g
         self.exact = exact
         if self.exact or epsilon_prox == 0:
@@ -64,6 +64,7 @@ class inexact_pla():
     
     def simulate(self, verbose=False):
         if verbose: sys.stdout.write('run inexact PLA: {:3d}% '.format(0)); sys.stdout.flush()
+        stop = False
         while not stop:
             # update step
             self.update()
@@ -118,8 +119,6 @@ class inexact_pla():
         z = z if (self.step_type == 'bt') else self.x-tau*self.dfx   # gradient step
         res = prox_g(z+np.sqrt(2*tau)*xi, tau)
 
-        # assign output correctly, compute log-density at sample
         (self.x,self.num_prox_its) = (res,0) if self.exact else res
         self.dfx = self.df(self.x)
-        self.logpi_vals[self.iter-1] = self.f(self.x) + self.g(self.x)
         

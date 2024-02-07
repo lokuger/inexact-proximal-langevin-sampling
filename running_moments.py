@@ -26,4 +26,4 @@ class running_moments:
             return 0
         
     def get_std(self):
-        return np.sqrt(self.get_var)
+        return np.sqrt(self.get_var())
