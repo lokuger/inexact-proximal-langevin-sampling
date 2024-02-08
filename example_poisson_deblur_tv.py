@@ -68,8 +68,8 @@ def power_method(ata, n, tol, max_iter, verbose=False):
     return val
 
 def callback_ipla(s,rm,rmFT,rmDS,log_pi_vals,tau_all,samplesFT=None):
-    x = s.x                                     # current sample
-    log_pi_vals[s.iter-1] = s.f(x) + s.g(x)       # log-density of current sample
+    x = s.x                                         # current sample
+    log_pi_vals[s.iter-1] = s.f(x) + s.g(x)         # log-density of current sample
     if s.step_type == 'bt':
         tau_all[s.iter-1] = s.tau_old 
     if s.iter > s.burnin:
@@ -219,12 +219,13 @@ def main():
         # i.e. Fourier modes, hence FT variance matrix is post. cov.
         samplesFT = np.reshape(samplesFT,(np.prod(x.shape),params['iterations']))
         post_cov = rmFT.get_var()
-        c_fast = samplesFT[np.argmin(post_cov),:]
-        acf_fast = autocorr(c_fast)
-        c_slow = samplesFT[np.argmax(post_cov),:]
-        acf_slow = autocorr(c_slow)
-        c_med = samplesFT[np.argsort(post_cov.flatten())[np.prod(x.shape)//2],:]
-        acf_med = autocorr(c_med)
+        mixing_comp = {}
+        mixing_comp['c_fast'] = samplesFT[np.argmin(post_cov),:]
+        mixing_comp['acf_fast'] = autocorr(mixing_comp['c_fast'])
+        mixing_comp['c_slow'] = samplesFT[np.argmax(post_cov),:]
+        mixing_comp['acf_slow'] = autocorr(mixing_comp['c_slow'])
+        mixing_comp['c_med'] = samplesFT[np.argsort(post_cov.flatten())[np.prod(x.shape)//2],:]
+        mixing_comp['acf_med'] = autocorr(mixing_comp['c_med'])
         
         ########## plots ##########
         plt.plot(np.arange(1,n_samples+1), log_pi_vals)
@@ -243,9 +244,9 @@ def main():
             plt.plot(np.arange(n_samples),tau_cum)
             plt.title('Cumulative steps')
             plt.show()
-        plt.plot(np.arange(101),acf_fast,'-xr')
-        plt.plot(np.arange(101),acf_med,'-+b')
-        plt.plot(np.arange(101),acf_slow,'-ok')
+        plt.plot(np.arange(101),mixing_comp['acf_fast'],'-xr')
+        plt.plot(np.arange(101),mixing_comp['acf_med'],'-+b')
+        plt.plot(np.arange(101),mixing_comp['acf_slow'],'-ok')
         plt.title('Autocorrelation functions')
         plt.show()
 
@@ -266,7 +267,7 @@ def main():
         print('MMSE: mu_TV = {:.1f};\tPSNR: {:.2f}'.format(mu_tv,10*np.log10(np.max(x)**2/np.mean((mn-x)**2))))
         
         # saving
-        np.savez(results_file,x=x,y=y,u=u,mn=mn,std=std,**std_scaled,c_fast=c_fast,acf_fast=acf_fast,c_slow=c_slow,acf_slow=acf_slow,c_med=c_med,acf_med=acf_med)
+        np.savez(results_file,x=x,y=y,u=u,mn=mn,std=std,**std_scaled,**mixing_comp)
     else:
         #%% results were already computed, show images
         R = np.load(results_file)
