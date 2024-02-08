@@ -112,9 +112,9 @@ def main():
                 acfs_slow.append(R['acf_slow'])
                 acfs_med.append(R['acf_med'])
                 legend_name = '{} prox its., '.format(conf[0]) + (r'BT $\gamma_k$' if conf[1] == 'btsteps' else r'$\gamma = 1/\tilde L$')
-                axs[0].plot(range(101),R['acf_fast'],ls,label=legend_name,markersize=5)
-                axs[1].plot(range(101),R['acf_med'],ls,label=legend_name,markersize=5)
-                axs[2].plot(range(101),R['acf_slow'],ls,label=legend_name,markersize=5)
+                axs[0].plot(range(101),R['acf_fast'],ls,label=legend_name,markersize=5,markevery=5)
+                axs[1].plot(range(101),R['acf_med'],ls,label=legend_name,markersize=5,markevery=5)
+                axs[2].plot(range(101),R['acf_slow'],ls,label=legend_name,markersize=5,markevery=5)
             # acf plots
             axs[0].set_title('Fastest component')
             axs[1].set_title('Median component')
