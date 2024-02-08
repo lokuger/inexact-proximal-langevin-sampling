@@ -1,3 +1,7 @@
+# irrelevant files used for testing/applications in between
+sapg.py
+pxmala.py
+
 # bash scripts to run examples on HPC cluster
 *.sh
 
